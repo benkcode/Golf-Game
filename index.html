@@ -388,7 +388,20 @@
     .char-card[aria-checked="true"] { border-color: var(--ui-outline); box-shadow: 0 4px 0 var(--ui-outline); transform: translateY(-2px); }
     .join-row, .menu-row, .share-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; } .menu-row { grid-template-columns: 1fr 1fr; }
     .menu-error { min-height: 18px; margin: 10px 0 0; color: #c0392b; font-weight: 800; font-size: 13px; }
-    .lobby-code { font: 900 58px/1 system-ui, sans-serif; letter-spacing: .18em; margin: 4px 0 8px; color: var(--ui-ink); }
+    /* the room code is the thing people share, so it gets the stage */
+    .code-ticket { position: relative; margin: 2px 0 12px; padding: 14px 14px 16px; border: 2.5px dashed #1f4d2e; border-radius: 18px; background: linear-gradient(170deg, #fbf7ea, #efe6cf); }
+    .code-ticket .eyebrow { color: #1f4d2e; }
+    .lobby-code { display: flex; justify-content: center; gap: 10px; margin: 10px auto 10px; padding: 0; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
+    .lobby-code span { display: grid; place-items: center; width: 62px; height: 76px; border: 3px solid #172238; border-radius: 14px; background: #fffdf5; box-shadow: 0 5px 0 #172238; font: 900 46px/1 system-ui, -apple-system, sans-serif; color: #172238; }
+    .lobby-code.copied span { background: #dff5e3; }
+    .code-help { margin: 4px 0 10px; font-size: 13px; color: #4b5563; } .code-help b { color: #172238; }
+    .code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .invite-link { margin-bottom: 8px; text-align: left; } .invite-link summary { cursor: pointer; font-size: 12px; font-weight: 800; color: #6b7280; padding: 4px 2px; }
+    .invite-link .share-row { margin-top: 6px; } .invite-link .text-input { font-size: 12px; }
+    #lb-room { display: block; width: calc(100% - 20px); margin: 0 10px 6px; padding: 5px 8px; border: 2px dashed #1f4d2e; border-radius: 10px; background: #f3f7ec; color: #1f4d2e; font: 800 11px/1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; text-align: center; }
+    #lb-room b { font-size: 15px; letter-spacing: .22em; color: #172238; margin-left: 4px; }
+    @media (max-width: 420px) { .lobby-code span { width: 54px; height: 66px; font-size: 40px; } .lobby-code { gap: 8px; } }
+    @media (max-height: 520px) { .lobby-code span { height: 58px; width: 52px; font-size: 36px; } .code-ticket { padding: 10px; } }
     .lobby-players { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
     .lobby-players li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 9px 12px; border: 2px solid #d7dce6; border-radius: 14px; font-weight: 800; background: #fff; }
     .lobby-players .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--ui-outline); }
@@ -524,7 +537,7 @@
   <div id="pin-marker" hidden aria-hidden="true"><div class="pm-tag"><svg width="14" height="16" viewBox="0 0 14 16"><path d="M2 1v14" stroke="#172238" stroke-width="2" stroke-linecap="round"/><path d="M3 1.5 L13 5 L3 8.5 Z" fill="#e44b3a" stroke="#172238" stroke-width="1.2" stroke-linejoin="round"/></svg><b id="pm-dist">— yd</b></div><i class="pm-stem"></i><i class="pm-arrow"></i></div>
     <div id="ball-prompt" hidden><kbd>E</kbd><span>Hit the ball</span></div>
     <div id="shot-pop" hidden><b id="shot-pop-main"></b><small id="shot-pop-sub"></small></div>
-    <section id="leaderboard" hidden aria-live="polite"><div class="lb-head"><span>Leaderboard</span><span id="lb-hole">Hole 1</span></div><ol id="lb-rows"></ol><button id="lb-card" type="button">View scorecard</button></section>
+    <section id="leaderboard" hidden aria-live="polite"><div class="lb-head"><span>Leaderboard</span><span id="lb-hole">Hole 1</span></div><button id="lb-room" type="button" title="Tap to copy the room code">Room <b id="lb-code">····</b></button><ol id="lb-rows"></ol><button id="lb-card" type="button">View scorecard</button></section>
     <div id="turn-banner" hidden></div>
     <div id="player-tags"></div>
     <div id="teleport-gate" hidden role="dialog" aria-labelledby="tg-title">
@@ -612,10 +625,13 @@
 
   <section id="lobby-menu" class="screen-overlay" hidden>
     <div class="menu-panel">
-      <div class="eyebrow">Room code</div>
-      <div id="lobby-code" class="lobby-code">····</div>
-      <p class="menu-subtitle">Friends open the game on their own computer and type this code, or send them the link:</p>
-      <div class="share-row"><input id="lobby-link" class="text-input" readonly aria-label="Invite link"><button id="lobby-copy" class="menu-button" type="button">Copy</button></div>
+      <div class="code-ticket">
+        <div class="eyebrow">Your room code</div>
+        <button id="lobby-code" class="lobby-code" type="button" aria-label="Room code, tap to copy"><span>·</span><span>·</span><span>·</span><span>·</span></button>
+        <p class="code-help">Friends open the game, tap <b>Join room</b> and type this code.</p>
+        <div class="code-actions"><button id="lobby-share" class="menu-button primary" type="button">Share invite</button><button id="lobby-copy-code" class="menu-button" type="button">Copy code</button></div>
+      </div>
+      <details class="invite-link"><summary>Or send the invite link</summary><div class="share-row"><input id="lobby-link" class="text-input" readonly aria-label="Invite link"><button id="lobby-copy" class="menu-button" type="button">Copy link</button></div></details>
       <div class="field">Players</div>
       <ul id="lobby-players" class="lobby-players"></ul>
       <button id="lobby-start" class="menu-button primary" type="button">Start round</button>

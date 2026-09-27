@@ -1,14 +1,14 @@
-# Fairway Friends v27
+# Fairway Friends v28
 
 A cartoon nine-hole golf game you can play solo or against friends on their own computers.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v27.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v28.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v27 && python3 server.py
+cd ~/Downloads/fairway-friends-v28 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -21,7 +21,7 @@ If Terminal says the address is already in use, an older copy is still running: 
 
 On the sign-in screen, type your name and pick your golfer (boy or girl).
 
-- **Create a room** gives you a 4-letter code and an invite link.
+- **Create a room** shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
 - Friends type the code and press **Join room**, or open the invite link.
 - When everyone appears in the lobby, the host presses **Start round**.
 - Up to 4 players. Everyone plays the same wind.

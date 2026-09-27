@@ -1564,7 +1564,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function mpWaitText() { const t = mp.state && mpPlayer(mp.state.turnId); return t ? `Wait for ${t.name} to hit · everyone takes one shot before the next` : 'Waiting for the other players'; }
 
     function renderLobby(st) {
-      $('lobby-code').textContent = st.code; $('lobby-link').value = `${location.origin}${location.pathname}?room=${st.code}`;
+      if ($('lobby-code').dataset.code !== st.code) { $('lobby-code').dataset.code = st.code; $('lobby-code').innerHTML = [...st.code].map(ch => `<span>${ch}</span>`).join(''); } $('lb-code').textContent = st.code; $('lobby-link').value = `${location.origin}${location.pathname}?room=${st.code}`;
       const ul = $('lobby-players'); ul.innerHTML = '';
       st.players.forEach(p => { const li = document.createElement('li'); li.innerHTML = `<span class="dot" style="background:${p.color}"></span><span></span><small>${p.character === 'girl' ? 'Girl' : 'Boy'}${p.id === st.hostId ? ' · Host' : ''}</small>`; li.children[1].textContent = p.name + (p.id === mp.myId ? ' (you)' : ''); ul.appendChild(li); });
       const host = st.hostId === mp.myId; const n = st.players.length;
@@ -2545,7 +2545,19 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     $('join-code').addEventListener('keydown', e => { if (e.key === 'Enter') mpCreateOrJoin(true); e.stopPropagation(); }); $('player-name').addEventListener('keydown', e => e.stopPropagation());
     $('lobby-start').addEventListener('click', () => mpPost('start', mpAuth()).catch(e => { $('lobby-wait').textContent = e.message; }));
     $('lobby-leave').addEventListener('click', () => mpLeave());
-    $('lobby-copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('lobby-link').value); } catch (e) { $('lobby-link').select(); document.execCommand('copy'); } $('lobby-copy').textContent = 'Copied!'; setTimeout(() => { $('lobby-copy').textContent = 'Copy'; }, 1400); });
+    // sharing the room: big code tiles, native share sheet on phones, copy buttons everywhere
+    async function copyText(text) { try { await navigator.clipboard.writeText(text); return true; } catch (e) { const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e2) {} t.remove(); return ok; } }
+    function flashLabel(el, text) { const old = el.dataset.label || el.textContent; el.dataset.label = old; el.textContent = text; clearTimeout(el._t); el._t = setTimeout(() => { el.textContent = old; }, 1400); }
+    const roomCode = () => (mp.state && mp.state.code) || mp.code || '';
+    const copyCode = async () => { const code = roomCode(); if (!code) return; await copyText(code); const tiles = $('lobby-code'); tiles.classList.add('copied'); setTimeout(() => tiles.classList.remove('copied'), 1200); flashLabel($('lobby-copy-code'), 'Copied!'); };
+    $('lobby-code').addEventListener('click', copyCode); $('lobby-copy-code').addEventListener('click', copyCode);
+    $('lobby-share').addEventListener('click', async () => {
+      const code = roomCode(); const url = $('lobby-link').value; const text = `Play a round of Fairway Friends with me! Room code: ${code}`;
+      if (navigator.share) { try { await navigator.share({ title: 'Fairway Friends', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      await copyText(`${text}\n${url}`); flashLabel($('lobby-share'), 'Invite copied!');
+    });
+    $('lb-room').addEventListener('click', async () => { const code = roomCode(); if (!code) return; await copyText(code); flashLabel($('lb-code'), 'Copied!'); });
+    $('lobby-copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('lobby-link').value); } catch (e) { $('lobby-link').select(); document.execCommand('copy'); } $('lobby-copy').textContent = 'Copied!'; setTimeout(() => { $('lobby-copy').textContent = 'Copy link'; }, 1400); });
     $('lb-card').addEventListener('click', () => { if (!mp.state || mp.state.phase !== 'playing' || gameFlow.mode !== 'playing') return; clearHeldInputs(); showMpScorecard(mp.state); $('next-hole').hidden = false; $('next-hole').textContent = 'Back to the course'; $('card-wait').textContent = ''; $('card-leave').hidden = true; $('scorecard-title').textContent = 'Live scorecard'; $('scorecard-hole-tag').textContent = `Playing hole ${mp.state.hole + 1}`; mp.viewingCard = true; });
     document.querySelectorAll('.char-card').forEach(c => c.addEventListener('click', () => selectCharacter(c.dataset.character)));
     $('tut-next').addEventListener('click', () => advanceTutorial()); $('tut-skip').addEventListener('click', () => endTutorial());
