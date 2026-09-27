@@ -1,14 +1,14 @@
-# Fairway Friends v28
+# Fairway Friends v30
 
 A cartoon nine-hole golf game you can play solo or against friends on their own computers.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v28.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v30.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v28 && python3 server.py
+cd ~/Downloads/fairway-friends-v30 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -60,6 +60,7 @@ The game switches to touch controls automatically on phones and tablets:
 - Tap a club in the tray at the bottom (swipe it to see them all).
 - Hold the big yellow **SWING** button for power, let go, then tap it again when it turns green and the marker is in the gold zone.
 - **☰** pauses the game, restarts the hole or opens Settings.
+- Your score is a small circle at the top right (green under par, red over; in a room it also shows your place). Tap it for the full scorecard. Between holes you get a slim strip with your result and **Next hole**; the full card shows after the round (or tap **Full card**).
 - A flag tag with the distance always floats over today's pin (on phones and computers), so you can see where you're aiming from the tee. If the pin is off-screen, the tag sits at the edge and points toward it.
 
 To play on a phone, the phone has to reach the computer running `server.py`: on the same Wi-Fi, open `http://YOUR-COMPUTER-IP:8010` (see "Friends on the same Wi-Fi" below), or use the Render link. Add `?touch=1` or `?touch=0` to the address to force touch controls on or off.
@@ -79,6 +80,28 @@ The first time you play, hole 1 walks you through every control. Click **? Contr
 When you finish a hole the game cheers you on ("Nice birdie!", "Nice par!", "Good bogey"…) before the scorecard appears.
 
 Water costs 1 stroke and you drop on dry grass behind the pond. Out of bounds (past the white stakes along the sides, or deep into the trees) costs 1 stroke and you replay the shot. Hitting over the green is fine: there's rough all around the back of each green, so you just chip back from where the ball stops. In a bunker only the Wedge works.
+
+## Leaderboard and saved scores
+
+Every finished nine-hole round (solo or in a room) is posted to the leaderboard automatically. Open **🏆 Leaderboard** on the main menu:
+
+- **All-time / This week / Today**: each golfer's best round, lowest score first. You're highlighted.
+- **My rounds**: every round you've finished on this device, with your best and your average.
+
+At the end of a round the scorecard shows where you placed ("You're #2 of 57 golfers all-time").
+
+Scores are checked on the server (nine holes, each between 1 stroke and double par; room rounds are recorded by the server itself), and one device can't post rounds seconds apart.
+
+### Keeping scores on Render (important)
+
+Render's free plan wipes the server's files every time it restarts or goes to sleep, so a plain scores file would be emptied several times a day. Use a free Upstash database instead (about 5 minutes, no card needed):
+
+1. Sign up at [upstash.com](https://upstash.com) and create a **Redis** database (any region near your Render region, free plan).
+2. On the database page, find the **REST API** section and copy the two values: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+3. In Render, open your service > **Environment** > **Add Environment Variable**, add both with exactly those names, and save. Render restarts the game.
+4. Check the server log on Render: it should say `Leaderboard: 0 saved rounds loaded from Upstash.`
+
+On your own computer (or a paid Render service with a disk) nothing is needed: scores are saved in `scores.json` next to `server.py`, or in the folder named by a `DATA_DIR` environment variable. `scores.json` is never served to players and is listed in `.gitignore` so it doesn't end up on GitHub.
 
 ## Greens
 

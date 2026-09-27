@@ -107,7 +107,7 @@
       tracer: { maxPoints: 420, width: .22, lingerSeconds: 2.2, color: 0xffe066 },
       effects: { maxParticles: 260, maxTrailPoints: 42, trailInterval: .028, particleGravity: 7.2, splashRingCount: 6 },
       onboarding: { tipDuration: 4.3 },
-      storage: { settingsKey: 'fairwayFriends.settings.v1', bestScoreKey: 'fairwayFriends.bestScore.v1', tipsKey: 'fairwayFriends.tips.v1', tutorialKey: 'fairwayFriends.tutorialDone.v1', teleportKey: 'fairwayFriends.teleportTaught.v1' },
+      storage: { settingsKey: 'fairwayFriends.settings.v1', bestScoreKey: 'fairwayFriends.bestScore.v1', tipsKey: 'fairwayFriends.tips.v1', tutorialKey: 'fairwayFriends.tutorialDone.v1', teleportKey: 'fairwayFriends.teleportTaught.v1', historyKey: 'fairwayFriends.history.v1', deviceKey: 'fairwayFriends.device.v1' },
       settingsDefaults: { character: 'boy', sound: true, music: true, musicVolume: .35, cameraSensitivity: 1, trajectoryPreview: true, mouseAim: true, mouseSensitivity: .6, autoClub: true },
       debug: { enabled: false, allowSpinKeys: false, allowLoftKeys: false },
       courseVisuals: { treeTrunkColor: 0x76502e, treeDarkColor: 0x285f3a, treeLightColor: 0x3f8750, fairwayStripeA: 0x91ce72, fairwayStripeB: 0x86c567, roughColor: 0x78b963, greenColor: 0x73bd68, fringeColor: 0x65ae5d, sandColor: 0xe4c47e, waterColor: 0x4caec4, outOfBoundsColor: 0xf8f7e9, markerBlue: 0x3c76d9, markerWhite: 0xf5f3dc, markerRed: 0xe95d58, slopeColor: 0xd8f0b8, flagHeightMeters: 2.5, cupDiameterMeters: .5,
@@ -1388,6 +1388,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function holeTotal() { return holeState.strokes + holeState.penalties; }
     function currentRoundScore() { return scorecard.reduce((sum, row, index) => sum + (row.score === null ? (index === currentHoleIndex ? holeTotal() : 0) : row.score), 0); }
     function currentRoundPar() { return scorecard.reduce((sum, row, index) => sum + (row.score !== null || (index === currentHoleIndex && holeTotal() > 0) ? row.par : 0), 0); }
+    // score to par counts finished holes only (like real golf: '+1 thru 3'); a hole in progress never shows as under par
+    function roundToPar() { let strokes = 0, par = 0; scorecard.forEach(row => { if (row.score !== null) { strokes += row.score; par += row.par; } }); return strokes - par; }
     function formatToPar(value) { return value === 0 ? 'E' : value > 0 ? `+${value}` : `${value}`; }
     function scoreTerm(score, par) { if (score === 1) return 'Hole in one'; const difference = score - par; if (difference <= -3) return 'Albatross'; if (difference === -2) return 'Eagle'; if (difference === -1) return 'Birdie'; if (difference === 0) return 'Par'; if (difference === 1) return 'Bogey'; if (difference === 2) return 'Double bogey'; if (difference === 3) return 'Triple bogey'; return `+${difference}`; }
     // the friendly line shown when a hole ends
@@ -1407,6 +1409,49 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     // let the hole cheer and confetti play on the course before the scorecard slides in
     function afterCheer(fn) { const wait = (showHoleCheer.until || 0) - performance.now(); if (wait > 0) setTimeout(fn, wait); else fn(); }
 
+    // ---------- saved scores: your own history on this device + the all-time leaderboard on the server ----------
+    const roundRecord = { id: null, saved: false, mpKey: null, rankHtml: '' };
+    function deviceId() { let id = readStoredJSON(CONFIG.storage.deviceKey, null); if (!id) { id = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`).replace(/[^a-z0-9-]/gi, '').slice(0, 32); writeStoredJSON(CONFIG.storage.deviceKey, id); } return id; }
+    function readHistory() { const h = readStoredJSON(CONFIG.storage.historyKey, []); return Array.isArray(h) ? h : []; }
+    function addToHistory(entry) { const h = readHistory(); if (h.some(r => r.id === entry.id)) return; h.unshift(entry); writeStoredJSON(CONFIG.storage.historyKey, h.slice(0, 60)); }
+    function showCardRank(html, keep = true) { if (keep && html) roundRecord.rankHtml = html; const el = $('card-rank'); el.hidden = !html; el.innerHTML = html || ''; const btn = el.querySelector('button'); if (btn) btn.addEventListener('click', () => { gameFlow.boardFromCard = true; openBoard('all'); }); }
+    async function postFinishedRound(holes, mode) {
+      const total = holes.reduce((a, b) => a + b, 0); const toPar = total - totalCoursePar();
+      if (mode === 'solo') { if (roundRecord.saved) { showCardRank(roundRecord.rankHtml); return; } roundRecord.saved = true; }
+      const id = mode === 'solo' ? (roundRecord.id || `${deviceId()}-${Date.now().toString(36)}`) : roundRecord.mpKey;
+      addToHistory({ id, when: Date.now(), holes, total, toPar, mode }); saveBestScore(total);
+      showCardRank('Saving your round…');
+      try {
+        let rank = null, players = null;
+        if (mode === 'solo') { const r = await fetch('/api/score', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settings.playerName || 'Golfer', holes, character: settings.character, device: deviceId(), roundId: id }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'save failed'); rank = d.rank; players = d.players; }
+        else { await new Promise(res => setTimeout(res, 600)); const d = await (await fetch(`/api/leaderboard?period=all&limit=1&device=${encodeURIComponent(deviceId())}`)).json(); rank = d.me && d.me.rank; players = d.players; }
+        showCardRank(rank ? `🏆 You’re <b>#${rank}</b> of ${players} golfers all-time <button type="button">Leaderboard</button>` : `Round saved <button type="button">Leaderboard</button>`);
+      } catch (e) { showCardRank('Saved to <b>My rounds</b> on this device (the leaderboard server couldn’t be reached).'); }
+    }
+    let boardPeriod = 'all';
+    function openBoard(period = boardPeriod) { hideMenuScreens(); $('scorecard-overlay').hidden = true; $('board-menu').hidden = false; document.body.classList.add('menu-open'); if (gameFlow.mode !== 'scorecard') gameFlow.boardReturn = gameFlow.mode; gameFlow.mode = 'menu'; renderBoard(period); }
+    function closeBoard() { $('board-menu').hidden = true; if (gameFlow.boardFromCard) { gameFlow.boardFromCard = false; document.body.classList.remove('menu-open'); if (mp.active && mp.state) showMpScorecard(mp.state); else renderScorecard(); return; } showMainMenu(); }
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const whenText = ms => { const d = new Date(ms); const days = Math.floor((Date.now() - ms) / 86400000); return days <= 0 ? 'today' : days === 1 ? 'yesterday' : days < 7 ? `${days} days ago` : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+    const tpClass = v => v < 0 ? 'under' : v > 0 ? 'over' : 'even';
+    async function renderBoard(period) {
+      boardPeriod = period; document.querySelectorAll('.board-tabs button').forEach(b => b.classList.toggle('on', b.dataset.period === period)); const body = $('board-body'); const note = $('board-note');
+      if (period === 'mine') {
+        const h = readHistory(); if (!h.length) { note.textContent = ''; body.innerHTML = '<div class="board-empty">No finished rounds yet. Play all nine holes and your scores show up here.</div>'; return; }
+        const best = Math.min(...h.map(r => r.total)); const avg = h.reduce((a, r) => a + r.total, 0) / h.length;
+        note.textContent = 'Rounds you finished on this device.';
+        body.innerHTML = `<div class="board-stats"><div><small>Rounds</small><b>${h.length}</b></div><div><small>Best</small><b>${best} <span style="font-size:13px">(${formatToPar(best - totalCoursePar())})</span></b></div><div><small>Average</small><b>${avg.toFixed(1)}</b></div></div>` +
+          h.slice(0, 40).map((r, i) => `<div class="board-row"><span class="rk">${h.length - i}</span><span class="nm">${r.mode === 'room' ? 'Room round' : 'Solo round'}<small>${whenText(r.when)} · ${r.holes.join(' ')}</small></span><span class="tp ${tpClass(r.toPar)}">${formatToPar(r.toPar)}</span><span class="tt">${r.total}</span></div>`).join('');
+        return;
+      }
+      note.textContent = 'Loading…'; body.innerHTML = '';
+      try {
+        const d = await (await fetch(`/api/leaderboard?period=${period}&limit=100&device=${encodeURIComponent(deviceId())}`)).json(); if (boardPeriod !== period) return;
+        if (!d.entries.length) { note.textContent = ''; body.innerHTML = `<div class="board-empty">No rounds ${period === 'today' ? 'today' : period === 'week' ? 'this week' : 'yet'}. Finish all nine holes to get on the board!</div>`; return; }
+        note.textContent = `Each golfer’s best round · ${d.players} golfer${d.players === 1 ? '' : 's'} · ${d.rounds} round${d.rounds === 1 ? '' : 's'} played${d.me && !d.entries.some(e => e.me) ? ` · you’re #${d.me.rank}` : ''}`;
+        body.innerHTML = d.entries.map(e => `<div class="board-row${e.me ? ' me' : ''}"><span class="rk${e.rank <= 3 ? ` top r${e.rank}` : ''}">${e.rank}</span><span class="nm">${esc(e.name)}${e.me ? '<em>you</em>' : ''}<small>${whenText(e.when * 1000)} · ${e.mode === 'room' ? 'room' : 'solo'}</small></span><span class="tp ${tpClass(e.toPar)}">${formatToPar(e.toPar)}</span><span class="tt">${e.total}</span></div>`).join('');
+      } catch (e) { note.textContent = ''; body.innerHTML = '<div class="board-empty">The leaderboard server couldn’t be reached. Your own scores are under <b>My rounds</b>.</div>'; }
+    }
     function totalCoursePar() { return COURSE_DATA.holes.reduce((sum, hole) => sum + hole.par, 0); }
     function updateBestScoreDisplay() {
       const best = readStoredJSON(CONFIG.storage.bestScoreKey, null); const element = $('best-score');
@@ -1427,7 +1472,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       previewEnabled = settings.trajectoryPreview; previewClock = 1; $('toggle-preview').textContent = `Preview ${previewEnabled ? 'ON' : 'OFF'} · P`; audioEngine.applySettings(); syncSettingsUI(); saveSettings();
     }
     function clearHeldInputs() { Object.keys(movement.keys).forEach(key => { movement.keys[key] = false; }); movement.velocity.set(0, 0, 0); movement.moving = false; if (swing.phase === 'power' && !swingAnimation.active) resetSwingMeter(); else swing.holdActive = false; }
-    function hideMenuScreens() { ['main-menu', 'lobby-menu', 'how-menu', 'settings-menu', 'pause-menu', 'confirm-restart'].forEach(id => { $(id).hidden = true; }); }
+    function hideMenuScreens() { ['main-menu', 'lobby-menu', 'board-menu', 'how-menu', 'settings-menu', 'pause-menu', 'confirm-restart'].forEach(id => { $(id).hidden = true; }); }
     // Restarting a hole always asks first
     let restartReturnsToPause = false;
     function askRestartHole() {
@@ -1547,7 +1592,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       settings.playerName = name; applySettings(); $('signin-error').textContent = ''; audioEngine.ensure();
       const code = $('join-code').value.trim().toUpperCase(); if (join && code.length !== 4) { $('signin-error').textContent = 'Room codes have 4 letters.'; return; }
       try {
-        const r = await mpPost(join ? 'join' : 'create', { name, character: settings.character, code });
+        const r = await mpPost(join ? 'join' : 'create', { name, character: settings.character, code, device: deviceId() });
         Object.assign(mp, { active: true, code: r.code, token: r.token, myId: r.id, started: false, lastHole: -1, state: null, lastTurn: null });
         sessionStorage.setItem('ff-mp', JSON.stringify({ code: r.code, token: r.token, id: r.id })); history.replaceState(null, '', `?room=${r.code}`); mpConnect();
       } catch (e) { $('signin-error').textContent = e.message; }
@@ -1623,8 +1668,24 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         $('next-hole').hidden = false; $('next-hole').textContent = `Tee off hole ${st.hole + 2}`; $('card-leave').hidden = true; $('card-wait').textContent = 'Anyone can start the next hole.';
       }
       showScorecard();
+      showCardRank('', false); if (st.phase === 'finished' && !mp.viewingCard) { const mine = st.players.find(p => p.id === mp.myId); const key = `${st.code}-${st.winds ? JSON.stringify(st.winds).length : ''}-${mine ? mine.scores.join('') : ''}-${Math.floor(Date.now() / 600000)}`; if (mine && mine.scores.every(v => v !== null)) { if (roundRecord.mpKey !== key) { roundRecord.mpKey = key; roundRecord.rankHtml = ''; postFinishedRound(mine.scores.slice(), 'room'); } else if (roundRecord.rankHtml) showCardRank(roundRecord.rankHtml); } }
+      applyCardMode(st.phase === 'finished');
     }
     function mpNextFromCard() { if (!mp.state) return; if (mp.state.phase === 'finished') mpPost('rematch', mpAuth()).catch(e => updateStatus(e.message)); else mpPost('next', mpAuth()).catch(e => updateStatus(e.message)); }
+    // phones: between holes the card shrinks to a slim strip (the full card is one tap away, and shows in full after the round)
+    function ordinal(n) { return n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || 'th'); }
+    function myRoundStatus() {
+      if (mp.active && mp.state) { const st = mp.state; const ranked = st.players.filter(p => !p.left).map(p => ({ p, t: playerTotals(p.scores, st.pars) })).sort((a, b) => a.t.total - b.t.total); const i = ranked.findIndex(r => r.p.id === mp.myId); const me = ranked[i]; if (!me) return null;
+        const place = ranked.filter(r => r.t.total < me.t.total).length + 1; const tied = ranked.filter(r => r.t.total === me.t.total).length > 1; return { toPar: me.t.toPar, thru: me.t.thru, place: ranked.length > 1 ? (tied ? 'T' : '') + ordinal(place) : '' }; }
+      const t = playerTotals(scorecard.map(r => r.score), scorecard.map(r => r.par)); return { toPar: t.toPar, thru: t.thru, place: '' };
+    }
+    function applyCardMode(final) {
+      const mini = touchUI.compact && !final && !mp.viewingCard && !cardFullRequested; $('scorecard-overlay').classList.toggle('mini', mini); if (!mini) return;
+      const me = myRoundStatus(); const hole = mp.active && mp.state ? mp.state.hole : currentHoleIndex; const mine = mp.active && mp.state ? (mp.state.players.find(p => p.id === mp.myId) || {}).scores?.[hole] : scorecard[currentHoleIndex].score; const par = mp.active && mp.state ? mp.state.pars[hole] : currentHole.par;
+      $('scorecard-title').textContent = mine ? holeCheer(mine, par).main : `Hole ${hole + 1} complete`;
+      $('card-mini-line').innerHTML = me ? `Hole ${hole + 1} done · you’re <b>${me.toPar === 0 ? 'even' : formatToPar(me.toPar)}</b> thru ${me.thru}${me.place ? ` · <b>${me.place}</b>` : ''}` : '';
+    }
+    let cardFullRequested = false;
     function closeLiveCard() { $('scorecard-overlay').hidden = true; gameFlow.mode = 'playing'; mp.viewingCard = false; }
 
     // ---- other players on the course ----
@@ -2116,13 +2177,14 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function renderScorecard() {
       const pars = scorecard.map(r => r.par); const me = { name: playerName(), color: '#4d75ef', scores: scorecard.map(r => r.score) };
       $('golf-card-wrap').innerHTML = golfCardHtml([me], pars, currentHoleIndex); $('card-leave').hidden = true; $('card-wait').textContent = ''; $('next-hole').hidden = false;
-      const t = playerTotals(me.scores, pars); const final = currentHoleIndex === COURSE_DATA.holes.length - 1 && scorecard.every(row => row.score !== null); gameComplete = final; if (final) saveBestScore(t.total);
+      const t = playerTotals(me.scores, pars); const final = currentHoleIndex === COURSE_DATA.holes.length - 1 && scorecard.every(row => row.score !== null); gameComplete = final;
       $('scorecard-hole-tag').textContent = final ? 'Final' : `Hole ${currentHole.number}`;
       $('scorecard-title').textContent = final ? 'Final scorecard' : `Hole ${currentHole.number} complete`; $('scorecard-subtitle').textContent = final ? `Round complete · ${t.total} strokes · ${t.toPar === 0 ? 'Even par' : formatToPar(t.toPar)}` : `${holeCheer(scorecard[currentHoleIndex].score, currentHole.par).main} · ${formatToPar(t.toPar)} for the round`; $('next-hole').textContent = final ? 'Play again' : `Next hole · ${currentHoleIndex + 2}`;
-      showScorecard();
+      showCardRank('', false); if (final && !mp.active) postFinishedRound(scorecard.map(r => r.score), 'solo');
+      showScorecard(); applyCardMode(final);
     }
     function advanceHole() { if (currentHoleIndex >= COURSE_DATA.holes.length - 1) { restartRound(true); return; } loadHole(currentHoleIndex + 1, true); }
-    function restartRound(present = true) { scorecard.forEach(row => { row.score = null; }); gameComplete = false; loadHole(0, present); }
+    function restartRound(present = true) { scorecard.forEach(row => { row.score = null; }); roundRecord.id = `${deviceId()}-${Date.now().toString(36)}`; roundRecord.saved = false; roundRecord.rankHtml = ''; gameComplete = false; loadHole(0, present); }
     function resetCurrentHole() { scorecard[currentHoleIndex].score = null; loadHole(currentHoleIndex, true); }
     function skipToNextHole() { if (holeState.completed || ballState.inFlight || swingAnimation.active) return; finishHole('skip'); }
 
@@ -2338,7 +2400,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       if (!touchMode || !currentHole) return; $('mb-num').textContent = String(currentHole.number); $('mb-name').textContent = currentHole.name; $('mb-par').textContent = `Par ${currentHole.par} · ${currentHole.lengthYards} yds`;
       $('mb-pin').textContent = lie === 'green' || lie === 'fringe' ? `${Math.round(Math.hypot(ballState.position.x - currentHole.pin.x, ballState.position.z - currentHole.pin.z) * 3.281)} ft` : `${pinYards} yd`;
       $('mb-wind').textContent = $('wind-mph').textContent.replace(' mph', ''); $('mb-wind-arrow').textContent = $('wind-arrow').textContent; $('mb-wind-arrow').style.transform = $('wind-arrow').style.transform;
-      const toPar = currentRoundScore() - currentRoundPar(); const el = $('mb-score'); el.textContent = currentRoundPar() ? formatToPar(toPar) : 'E'; el.className = toPar < 0 ? 'under' : toPar > 0 ? 'over' : '';
+      const toPar = roundToPar(); const el = $('mb-score'); const txt = formatToPar(toPar); if (el.textContent !== txt) { el.textContent = txt; const b = $('mb-score-btn'); b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); } el.className = toPar < 0 ? 'under' : toPar > 0 ? 'over' : ''; const st = mp.active ? myRoundStatus() : null; $('mb-place').textContent = st && st.place ? st.place : '';
     }
     function setupTouchControls() {
       applyTouchLayout(); if (!touchMode) return; $('flyover-skip').textContent = 'Tap to skip the flyover';
@@ -2496,7 +2558,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function updateHud() {
       if (!currentHole) return; const pinDistance = Math.hypot(ballState.position.x - currentHole.pin.x, ballState.position.z - currentHole.pin.z); const roundScore = currentRoundScore(); const roundPar = currentRoundPar(); const lie = surfaceInfoAt(ballState.position.x, ballState.position.z).surface; const club = currentClub(); const lieLabels = { tee: 'Tee', fairway: 'Fairway', rough: 'Rough', sand: 'Bunker', fringe: 'Fringe', green: 'Green', water: 'Water', outOfBounds: 'Out of bounds' };
-      $('hole-num').textContent = String(currentHole.number); $('hole-name').textContent = currentHole.name; $('hole-meta').textContent = `Par ${currentHole.par} · ${currentHole.lengthYards}`; drawYardageSketch(); markBallOnSketch(); const rise = (lie === 'green' || lie === 'fringe') ? greenHeightAt(currentHole.pin.x, currentHole.pin.z) - greenHeightAt(ballState.position.x, ballState.position.z) : 0; $('pin-spot').textContent = currentHole.pinLabel; $('pin-distance').textContent = (lie === 'green' || lie === 'fringe') ? `${Math.round(pinDistance * 3.281)} ft${rise > .06 ? ' uphill' : rise < -.06 ? ' downhill' : ''}` : `${Math.round(metersToYards(pinDistance))} to pin`; $('lie').textContent = (lieLabels[lie] || lie).toLowerCase(); updateMobileBar(Math.round(metersToYards(pinDistance)), lie); $('stroke-count').textContent = String(holeTotal()); $('course-score').textContent = String(roundScore); $('score-to-par').textContent = `Course: ${formatToPar(roundScore - roundPar)}`; $('score-to-par').style.color = roundScore - roundPar > 0 ? 'var(--ui-red)' : roundScore - roundPar < 0 ? 'var(--ui-green)' : 'var(--ui-blue)';
+      $('hole-num').textContent = String(currentHole.number); $('hole-name').textContent = currentHole.name; $('hole-meta').textContent = `Par ${currentHole.par} · ${currentHole.lengthYards}`; drawYardageSketch(); markBallOnSketch(); const rise = (lie === 'green' || lie === 'fringe') ? greenHeightAt(currentHole.pin.x, currentHole.pin.z) - greenHeightAt(ballState.position.x, ballState.position.z) : 0; $('pin-spot').textContent = currentHole.pinLabel; $('pin-distance').textContent = (lie === 'green' || lie === 'fringe') ? `${Math.round(pinDistance * 3.281)} ft${rise > .06 ? ' uphill' : rise < -.06 ? ' downhill' : ''}` : `${Math.round(metersToYards(pinDistance))} to pin`; $('lie').textContent = (lieLabels[lie] || lie).toLowerCase(); updateMobileBar(Math.round(metersToYards(pinDistance)), lie); $('stroke-count').textContent = String(holeTotal()); $('course-score').textContent = String(roundScore); $('score-to-par').textContent = `Course: ${formatToPar(roundToPar())}`; $('score-to-par').style.color = roundToPar() > 0 ? 'var(--ui-red)' : roundToPar() < 0 ? 'var(--ui-green)' : 'var(--ui-blue)';
       if (ballState.shotMessage !== lastRenderedShotMessage) { const message = $('shot-message'); lastRenderedShotMessage = ballState.shotMessage; message.textContent = ballState.shotMessage; message.classList.remove('pop'); requestAnimationFrame(() => message.classList.add('pop')); }
       $('wind-mph').textContent = `${wind.mph.toFixed(0)} mph`; const windDegrees = THREE.MathUtils.radToDeg(Math.atan2(wind.vector.x, -wind.vector.z)); const windLean = THREE.MathUtils.clamp(wind.mph / CONFIG.wind.maxMph, 0, 1); $('wind-arrow').style.transform = `rotate(${windDegrees}deg) translateY(${-windLean * 2}px) scale(${1 + windLean * .12})`; $('swing-title').textContent = club.putter ? `Putter · ${Math.round(putterRangeMeters() * 3.281)} ft max` : `${currentClubName} · ${Math.round(metersToYards(club.maxDistanceMeters))} yd`; if (!ballState.inFlight) refreshSuggestion(); else updateClubButtons();
     }
@@ -2519,6 +2581,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     // Menu and settings controls.
     $('play-game').addEventListener('click', startNewRound);
     $('open-how').addEventListener('click', showHowToPlay);
+    $('open-board').addEventListener('click', () => openBoard('all')); $('board-close').addEventListener('click', closeBoard);
+    document.querySelectorAll('.board-tabs button').forEach(b => b.addEventListener('click', () => renderBoard(b.dataset.period)));
     $('close-how').addEventListener('click', showMainMenu);
     $('open-settings-main').addEventListener('click', () => openSettings('menu'));
     $('open-settings-pause').addEventListener('click', () => openSettings('pause'));
@@ -2558,13 +2622,20 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     });
     $('lb-room').addEventListener('click', async () => { const code = roomCode(); if (!code) return; await copyText(code); flashLabel($('lb-code'), 'Copied!'); });
     $('lobby-copy').addEventListener('click', async () => { try { await navigator.clipboard.writeText($('lobby-link').value); } catch (e) { $('lobby-link').select(); document.execCommand('copy'); } $('lobby-copy').textContent = 'Copied!'; setTimeout(() => { $('lobby-copy').textContent = 'Copy link'; }, 1400); });
-    $('lb-card').addEventListener('click', () => { if (!mp.state || mp.state.phase !== 'playing' || gameFlow.mode !== 'playing') return; clearHeldInputs(); showMpScorecard(mp.state); $('next-hole').hidden = false; $('next-hole').textContent = 'Back to the course'; $('card-wait').textContent = ''; $('card-leave').hidden = true; $('scorecard-title').textContent = 'Live scorecard'; $('scorecard-hole-tag').textContent = `Playing hole ${mp.state.hole + 1}`; mp.viewingCard = true; });
+    function openPeekCard() {
+      if (gameFlow.mode !== 'playing') return; clearHeldInputs(); mp.viewingCard = true;
+      if (mp.active && mp.state) { if (mp.state.phase !== 'playing') { mp.viewingCard = false; return; } showMpScorecard(mp.state); $('scorecard-hole-tag').textContent = `Playing hole ${mp.state.hole + 1}`; }
+      else { const pars = scorecard.map(r => r.par); $('golf-card-wrap').innerHTML = golfCardHtml([{ name: playerName(), color: '#4d75ef', scores: scorecard.map(r => r.score) }], pars, currentHoleIndex); $('scorecard-hole-tag').textContent = `Playing hole ${currentHoleIndex + 1}`; const t = myRoundStatus(); $('scorecard-subtitle').textContent = t && t.thru ? `${t.toPar === 0 ? 'Even par' : formatToPar(t.toPar)} thru ${t.thru}` : 'No holes finished yet'; showScorecard(); }
+      $('scorecard-overlay').classList.remove('mini'); $('next-hole').hidden = false; $('next-hole').textContent = 'Back to the course'; $('card-wait').textContent = ''; $('card-leave').hidden = true; $('scorecard-title').textContent = 'Live scorecard';
+    }
+    $('lb-card').addEventListener('click', openPeekCard); $('mb-score-btn').addEventListener('click', openPeekCard);
+    $('card-full').addEventListener('click', () => { cardFullRequested = true; if (mp.active && mp.state) showMpScorecard(mp.state); else renderScorecard(); });
     document.querySelectorAll('.char-card').forEach(c => c.addEventListener('click', () => selectCharacter(c.dataset.character)));
     $('tut-next').addEventListener('click', () => advanceTutorial()); $('tut-skip').addEventListener('click', () => endTutorial());
     $('controls-chip').addEventListener('click', () => { const open = $('controls-panel').hidden; $('controls-panel').hidden = !open; $('controls-chip').setAttribute('aria-expanded', String(open)); document.body.classList.toggle('controls-open', open); });
     $('replay-tutorial').addEventListener('click', () => { $('controls-panel').hidden = true; document.body.classList.remove('controls-open'); $('controls-chip').setAttribute('aria-expanded', 'false'); if (gameFlow.mode === 'playing') startTutorial(); });
     $('confirm-restart-yes').addEventListener('click', () => closeRestartConfirm(true)); $('confirm-restart-no').addEventListener('click', () => closeRestartConfirm(false));
-    $('next-hole').addEventListener('click', () => { if (mp.viewingCard) { closeLiveCard(); return; } if (mp.active) mpNextFromCard(); else advanceHole(); });
+    $('next-hole').addEventListener('click', () => { cardFullRequested = false; if (mp.viewingCard) { closeLiveCard(); return; } if (mp.active) mpNextFromCard(); else advanceHole(); });
     $('card-leave').addEventListener('click', () => mpLeave());
     $('scorecard-overlay').addEventListener('click', e => { if (mp.viewingCard && e.target.id === 'scorecard-overlay') closeLiveCard(); });
     renderer.domElement.addEventListener('pointermove', event => {
@@ -2608,6 +2679,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         else if (gameFlow.mode === 'paused') resumeGame();
         else if (gameFlow.mode === 'playing') pauseGame();
         else if (!$('how-menu').hidden) showMainMenu();
+        else if (!$('board-menu').hidden) closeBoard();
         return;
       }
       if (gameFlow.mode === 'scorecard') { if (key === 'enter') { event.preventDefault(); if (mp.viewingCard) closeLiveCard(); else if (mp.active) mpNextFromCard(); else advanceHole(); } return; }

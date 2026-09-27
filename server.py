@@ -9,6 +9,13 @@ It serves the game files and runs the rooms:
   - each player's shot is played on their own screen; the result (and the ball's
     path, so everyone can watch it) is shared with the room
   - live scorecard for everyone
+  - an all-time leaderboard of every finished round (see "Saved scores" below)
+
+Saved scores: finished rounds are kept in scores.json next to this file (or in the folder
+named by the DATA_DIR environment variable). Free hosts like Render wipe files when they
+restart, so there you can keep scores in a free Upstash Redis database instead: set the
+UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN environment variables and the server
+uses it automatically.
 
 Run it:   python3 server.py        then open http://localhost:8010
 Online:   set the PORT environment variable (hosts like Render do this for you)
@@ -20,6 +27,8 @@ import random
 import secrets
 import threading
 import time
+import urllib.request
+from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -57,6 +66,144 @@ def make_winds():
     return [{"mph": round(random.uniform(0, MAX_WIND_MPH), 1), "angle": random.uniform(0, 6.283)} for _ in PARS]
 
 
+# ---------- saved scores & leaderboard ----------
+DATA_DIR = os.environ.get("DATA_DIR") or ROOT
+SCORES_FILE = os.path.join(DATA_DIR, "scores.json")
+UPSTASH_URL = (os.environ.get("UPSTASH_REDIS_REST_URL") or "").rstrip("/")
+UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN") or ""
+UPSTASH_KEY = "fairway-friends:rounds"
+MAX_SAVED_ROUNDS = 20000
+SUBMIT_GAP_SECONDS = 40            # one solo round per device/connection every 40 s is plenty
+score_lock = threading.Lock()
+saved_rounds = []                  # every finished round, oldest first
+seen_round_ids = set()
+last_submit = {}
+
+
+def clean_device(value):
+    return "".join(ch for ch in str(value or "") if ch.isalnum() or ch in "-_")[:32]
+
+
+def upstash(command):
+    req = urllib.request.Request(UPSTASH_URL, data=json.dumps(command).encode(),
+                                 headers={"Authorization": f"Bearer {UPSTASH_TOKEN}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=8) as reply:
+        return json.load(reply).get("result")
+
+
+def load_scores():
+    global saved_rounds
+    rows = []
+    try:
+        if UPSTASH_URL and UPSTASH_TOKEN:
+            rows = [json.loads(item) for item in (upstash(["LRANGE", UPSTASH_KEY, 0, -1]) or [])]
+            print(f"Leaderboard: {len(rows)} saved rounds loaded from Upstash.")
+        elif os.path.exists(SCORES_FILE):
+            with open(SCORES_FILE, encoding="utf-8") as f:
+                rows = json.load(f)
+            print(f"Leaderboard: {len(rows)} saved rounds loaded from {SCORES_FILE}.")
+    except Exception as error:  # a broken store should never stop the game
+        print("Leaderboard: could not load saved scores:", error)
+    saved_rounds = [r for r in rows if isinstance(r, dict) and isinstance(r.get("holes"), list)][-MAX_SAVED_ROUNDS:]
+    seen_round_ids.update(r.get("id") for r in saved_rounds)
+
+
+file_dirty = threading.Event()
+file_write_lock = threading.Lock()
+
+
+def write_scores_file():
+    with score_lock:
+        snapshot = list(saved_rounds)
+    with file_write_lock:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        tmp = f"{SCORES_FILE}.{os.getpid()}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, separators=(",", ":"))
+        os.replace(tmp, SCORES_FILE)
+
+
+def file_writer():
+    """One writer for scores.json: saves shortly after new rounds come in (never two writes at once)."""
+    while True:
+        file_dirty.wait()
+        time.sleep(0.3)
+        file_dirty.clear()
+        try:
+            write_scores_file()
+        except Exception as error:
+            print("Leaderboard: could not save scores:", error)
+
+
+def persist_round(entry):
+    """Store one new round without ever blocking play."""
+    if UPSTASH_URL and UPSTASH_TOKEN:
+        def push():
+            try:
+                upstash(["RPUSH", UPSTASH_KEY, json.dumps(entry)])
+            except Exception as error:
+                print("Leaderboard: could not save a round to Upstash:", error)
+        threading.Thread(target=push, daemon=True).start()
+    else:
+        file_dirty.set()
+
+
+def flush_scores():
+    if not (UPSTASH_URL and UPSTASH_TOKEN) and file_dirty.is_set():
+        try:
+            write_scores_file()
+            file_dirty.clear()
+        except Exception as error:
+            print("Leaderboard: could not save scores:", error)
+
+
+def record_round(name, holes, character, device, mode, round_id):
+    """Validate and save one finished nine-hole round. Returns the saved entry, or None."""
+    if not isinstance(holes, list) or len(holes) != len(PARS):
+        return None
+    try:
+        holes = [int(h) for h in holes]
+    except (TypeError, ValueError):
+        return None
+    if any(h < 1 or h > par * MAX_SCORE_MULTIPLIER for h, par in zip(holes, PARS)):
+        return None
+    round_id = str(round_id or secrets.token_hex(8))[:40]
+    with score_lock:
+        if round_id in seen_round_ids:
+            return next((r for r in saved_rounds if r["id"] == round_id), None)
+        total = sum(holes)
+        entry = {"id": round_id, "name": clean_name(name), "device": clean_device(device), "character": clean_character(character),
+                 "holes": holes, "total": total, "toPar": total - sum(PARS), "mode": mode, "when": int(time.time())}
+        saved_rounds.append(entry)
+        seen_round_ids.add(round_id)
+        if len(saved_rounds) > MAX_SAVED_ROUNDS:
+            del saved_rounds[0]
+    persist_round(entry)
+    return entry
+
+
+def leaderboard(period="all", limit=50, device=""):
+    now = time.time()
+    since = {"today": now - 86400, "week": now - 7 * 86400}.get(period, 0)
+    with score_lock:
+        rows = [r for r in saved_rounds if r["when"] >= since]
+    best = {}                                        # each golfer's best round (by device, else by name)
+    for r in rows:
+        key = r.get("device") or ("name:" + r["name"].lower())
+        if key not in best or (r["total"], r["when"]) < (best[key]["total"], best[key]["when"]):
+            best[key] = r
+    ranked = sorted(best.values(), key=lambda r: (r["total"], r["when"]))
+    entries, place, prev = [], 0, None
+    for i, r in enumerate(ranked):
+        if r["total"] != prev:
+            place, prev = i + 1, r["total"]
+        entries.append({"rank": place, "name": r["name"], "total": r["total"], "toPar": r["toPar"], "when": r["when"],
+                        "mode": r["mode"], "character": r["character"], "me": bool(device) and r.get("device") == device})
+    mine = next((e for e in entries if e["me"]), None)
+    return {"period": period, "players": len(entries), "rounds": len(rows), "entries": entries[:limit],
+            "me": mine, "storage": "upstash" if UPSTASH_URL and UPSTASH_TOKEN else "file"}
+
+
 class Room:
     def __init__(self):
         self.code = new_code()
@@ -67,6 +214,8 @@ class Room:
         self.turn_id = None
         self.winds = make_winds()
         self.clients = []             # list of (player_id, queue)
+        self.recorded = False
+        self.round_no = 0
         self.touched = time.time()
 
     def player_by_token(self, token):
@@ -124,6 +273,8 @@ class Room:
         if not any(not p["done"] for p in order):
             self.turn_id = None
             self.phase = "finished" if self.hole >= len(PARS) - 1 else "holeover"
+            if self.phase == "finished":
+                self.record_scores()
             return
         ids = [p["id"] for p in order]
         start = ids.index(self.turn_id) if self.turn_id in ids else -1
@@ -132,6 +283,17 @@ class Room:
             if not candidate["done"]:
                 self.turn_id = candidate["id"]
                 return
+
+    def record_scores(self):
+        """Save every player who finished all nine holes to the leaderboard (once per round)."""
+        if self.recorded:
+            return
+        self.recorded = True
+        for p in self.players:
+            if not p["left"] and all(sc is not None for sc in p["scores"]):
+                entry = record_round(p["name"], p["scores"], p["character"], p.get("device"), "room", f"{self.code}-{self.round_no}-{p['id']}")
+                if entry:
+                    p["posted"] = True
 
     def mark_left(self, player):
         player["left"] = True
@@ -156,7 +318,7 @@ class Room:
 def new_player(name, character, color):
     return {
         "id": secrets.token_hex(4), "token": secrets.token_hex(16), "name": clean_name(name),
-        "character": clean_character(character), "color": color, "scores": [None] * len(PARS),
+        "character": clean_character(character), "color": color, "scores": [None] * len(PARS), "device": "",
         "ball": None, "strokes": 0, "done": False, "holed": False, "connections": 0,
         "left": False, "last_seen": time.time(),
     }
@@ -194,7 +356,20 @@ class Handler(SimpleHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path == "/health":
             return self.json_reply(200, {"ok": True, "rooms": len(rooms)})
+        if url.path == "/api/leaderboard":
+            qs = parse_qs(url.query)
+            period = (qs.get("period") or ["all"])[0]
+            device = clean_device((qs.get("device") or [""])[0])
+            try:
+                limit = max(1, min(100, int((qs.get("limit") or ["50"])[0])))
+            except ValueError:
+                limit = 50
+            return self.json_reply(200, leaderboard(period if period in ("all", "week", "today") else "all", limit, device))
         if url.path != "/events":
+            if os.path.basename(url.path).startswith("scores.json"):
+                self.send_response(404)
+                self.end_headers()
+                return
             return super().do_GET()
         qs = parse_qs(url.query)
         code = (qs.get("code") or [""])[0].upper()
@@ -242,9 +417,23 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         body = self.read_json()
         with lock:
+            if path == "/api/score":
+                device = clean_device(body.get("device"))
+                who = device or self.client_address[0]
+                now = time.time()
+                if now - last_submit.get(who, 0) < SUBMIT_GAP_SECONDS:
+                    return self.json_reply(429, {"error": "Slow down: one round at a time."})
+                entry = record_round(body.get("name"), body.get("holes"), body.get("character"), device, "solo", body.get("roundId"))
+                if not entry:
+                    return self.json_reply(400, {"error": "That round could not be saved."})
+                last_submit[who] = now
+                board = leaderboard("all", 0, device)
+                return self.json_reply(200, {"ok": True, "entry": {k: entry[k] for k in ("total", "toPar")}, "rank": board["me"]["rank"] if board["me"] else None, "players": board["players"]})
+
             if path == "/api/create":
                 room = Room()
                 player = new_player(body.get("name"), body.get("character"), COLORS[0])
+                player["device"] = clean_device(body.get("device"))
                 room.players.append(player)
                 room.host_id = player["id"]
                 rooms[room.code] = room
@@ -262,6 +451,7 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.json_reply(409, {"error": "That room is full (4 players max)."})
                 used = {p["color"] for p in room.players}
                 player = new_player(body.get("name"), body.get("character"), next(c for c in COLORS if c not in used))
+                player["device"] = clean_device(body.get("device"))
                 room.players.append(player)
                 room.broadcast()
                 return self.json_reply(200, {"code": room.code, "token": player["token"], "id": player["id"]})
@@ -319,6 +509,8 @@ class Handler(SimpleHTTPRequestHandler):
                 room.players = [p for p in room.players if not p["left"]]
                 for p in room.players:
                     p["scores"] = [None] * len(PARS)
+                room.recorded = False
+                room.round_no += 1
                 room.winds = make_winds()
                 room.start_hole(0)
                 room.broadcast()
@@ -351,7 +543,11 @@ def housekeeping():
 
 
 if __name__ == "__main__":
+    load_scores()
+    threading.Thread(target=file_writer, daemon=True).start()
     threading.Thread(target=housekeeping, daemon=True).start()
+    import signal
+    signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))  # hosts stop us with SIGTERM: save first
     server = ThreadingHTTPServer(("", PORT), Handler)
     server.daemon_threads = True
     print(f"Fairway Friends is running at http://localhost:{PORT}")
@@ -361,3 +557,5 @@ if __name__ == "__main__":
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
+    finally:
+        flush_scores()
