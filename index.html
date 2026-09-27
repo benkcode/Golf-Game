@@ -446,6 +446,17 @@
     body.calm .hud .wind-card, body.calm .hud .score-card, body.calm #minimap, body.calm #club-selector { opacity: 0; pointer-events: none; transform: translateY(8px); }
     body.tut-on #hint { opacity: 0; }
     @media (prefers-reduced-motion: reduce) { #ball-prompt { animation: none; } }
+    /* the flag, always findable: a marker over today's pin (clamped to the screen edge when it's out of view) */
+    #pin-marker { position: fixed; z-index: 7; left: 0; top: 0; pointer-events: none; transform: translate(-50%, -100%); display: grid; justify-items: center; will-change: transform; }
+    #pin-marker .pm-tag { display: flex; align-items: center; gap: 5px; padding: 4px 9px 4px 7px; border: 2px solid #172238; border-radius: 99px; background: #fffdf5; box-shadow: 0 3px 0 rgba(23,34,56,.28); font: 900 13px/1 system-ui, -apple-system, sans-serif; color: #172238; white-space: nowrap; }
+    #pin-marker .pm-stem { width: 2px; height: 16px; background: linear-gradient(#172238, rgba(23,34,56,0)); }
+    #pin-marker .pm-arrow { display: none; }
+    #pin-marker.edge .pm-stem { display: none; }
+    #pin-marker.edge .pm-arrow { display: block; width: 0; height: 0; margin-top: 2px; border: 7px solid transparent; border-top-color: #172238; transform: rotate(var(--pm-rot, 0deg)); transform-origin: 50% 25%; }
+    body.compact #pin-marker .pm-tag { font-size: 12px; padding: 3px 8px 3px 6px; }
+    /* touch screens: no text selection or iOS copy/lookup menus on long presses */
+    body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    body.touch input, body.touch textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
     #landing-label { position: fixed; z-index: 6; transform: translate(-50%, -100%); pointer-events: none; font: 900 13px/1 system-ui, -apple-system, sans-serif; color: #172238; background: #ffe066; border: 2px solid #172238; border-radius: 99px; padding: 5px 10px; box-shadow: 0 3px 0 rgba(23,34,56,.25); white-space: nowrap; }
     #go-fade { position: fixed; inset: 0; background: #0f1d2e; opacity: 0; pointer-events: none; transition: opacity .2s ease; z-index: 50; }
     #go-fade.on { opacity: 1; }
@@ -510,6 +521,7 @@
 
     <section id="club-selector" class="hud-card"><div id="club-buttons"></div></section>
     <div id="landing-label" hidden></div>
+  <div id="pin-marker" hidden aria-hidden="true"><div class="pm-tag"><svg width="14" height="16" viewBox="0 0 14 16"><path d="M2 1v14" stroke="#172238" stroke-width="2" stroke-linecap="round"/><path d="M3 1.5 L13 5 L3 8.5 Z" fill="#e44b3a" stroke="#172238" stroke-width="1.2" stroke-linejoin="round"/></svg><b id="pm-dist">— yd</b></div><i class="pm-stem"></i><i class="pm-arrow"></i></div>
     <div id="ball-prompt" hidden><kbd>E</kbd><span>Hit the ball</span></div>
     <div id="shot-pop" hidden><b id="shot-pop-main"></b><small id="shot-pop-sub"></small></div>
     <section id="leaderboard" hidden aria-live="polite"><div class="lb-head"><span>Leaderboard</span><span id="lb-hole">Hole 1</span></div><ol id="lb-rows"></ol><button id="lb-card" type="button">View scorecard</button></section>

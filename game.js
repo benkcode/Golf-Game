@@ -2231,6 +2231,22 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       state.rollCap = club.putter ? Infinity : Math.sqrt(2 * CONFIG.physics.surfaces.fairway.rollDecel * club.maxRollMeters);
       const previewSpin = { backspinRpm: club.putter ? 0 : backspinForClub(club, 1), sidespinRpm: 0 }; return { state, previewSpin };
     }
+    // ---------- where am I hitting? a flag marker over the pin, and a landing tag that never covers it ----------
+    function updatePinMarker() {
+      const el = $('pin-marker'); const lie = currentHole ? surfaceInfoAt(ballState.position.x, ballState.position.z).surface : '';
+      const d = currentHole ? Math.hypot(ballState.position.x - currentHole.pin.x, ballState.position.z - currentHole.pin.z) : 0;
+      const show = currentHole && (gameFlow.mode === 'playing' || gameFlow.mode === 'intro') && !holeState.completed && !ballState.holed && !(lie === 'green' && d < 12) && !(mp.replay && mp.replay.active && false);
+      if (!show) { el.hidden = true; return null; }
+      const top = currentHole.pin.clone(); top.y = greenHeightAt(top.x, top.z) + CONFIG.courseVisuals.flagHeightMeters + .15;
+      const v = top.clone().project(camera); const behind = v.z > 1; let x = (v.x * .5 + .5) * innerWidth, y = (-v.y * .5 + .5) * innerHeight; if (behind) { x = innerWidth - x; y = innerHeight - 60; }
+      const padX = 48, topPad = touchMode ? 70 : 20, bottomPad = touchMode ? 150 : 120; const edge = behind || x < padX || x > innerWidth - padX || y < topPad + 30 || y > innerHeight - bottomPad;
+      const cx = THREE.MathUtils.clamp(x, padX, innerWidth - padX), cy = THREE.MathUtils.clamp(y, topPad + 30, innerHeight - bottomPad);
+      el.hidden = false; el.classList.toggle('edge', edge);
+      if (edge) { const ang = Math.atan2(y - cy, x - cx); el.style.setProperty('--pm-rot', `${(ang * 180 / Math.PI - 90).toFixed(0)}deg`); }
+      $('pm-dist').textContent = (lie === 'green' || lie === 'fringe') ? `${Math.round(d * 3.281)} ft` : `${Math.round(metersToYards(d))} yd`;
+      el.style.transform = `translate(${cx.toFixed(1)}px, ${cy.toFixed(1)}px) translate(-50%, -100%)`;
+      return el.getBoundingClientRect();
+    }
     function updateLandingMarker(now) {
       const aiming = gameFlow.mode === 'playing' && addressing && !ballState.holed && !holeState.completed && previewEnabled && landingMarker.userData.valid && !currentClub().putter;
       const flying = ballState.inFlight && !ballState.firstLandingRecorded && landingMarker.userData.valid && !ballState.isPutting;
@@ -2240,7 +2256,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       landingMarker.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(landingMarker.position) / 40, 1, 4)); // stays easy to see from far away
       const p = landingMarker.position.clone(); p.y += 1.1; p.project(camera);
       if (p.z > 1) { label.hidden = true; return; }
-      label.hidden = false; label.textContent = `Lands ~${landingMarker.userData.carryYards} yd`; label.style.left = `${(p.x * .5 + .5) * window.innerWidth}px`; label.style.top = `${(-p.y * .5 + .5) * window.innerHeight}px`;
+      label.hidden = false; label.textContent = `Lands ~${landingMarker.userData.carryYards} yd`; const lx = (p.x * .5 + .5) * window.innerWidth; let ly = (-p.y * .5 + .5) * window.innerHeight; label.style.left = `${lx}px`; label.style.top = `${ly}px`;
+      const pinBox = updateLandingMarker.pinBox; if (pinBox) { const r = label.getBoundingClientRect(); if (!(r.right < pinBox.left - 4 || r.left > pinBox.right + 4 || r.bottom < pinBox.top - 4 || r.top > pinBox.bottom + 4)) { const ground = landingMarker.position.clone().project(camera); ly = Math.max((-ground.y * .5 + .5) * window.innerHeight + r.height + 14, pinBox.bottom + r.height + 8); label.style.top = `${ly}px`; } }
     }
     function updateTracer(dt) {
       const flying = ballState.inFlight && !ballState.isPutting && !ballState.onGround;
@@ -2467,10 +2484,12 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const out = CONFIG.putting.pullFlagOnGreen && (cupDrop ? cupDrop.t < CONFIG.scoring.cupDropSeconds + 1.2 : !holeState.completed && (lie === 'green' || (ballState.inFlight && ballState.isPutting)));
       courseRuntime.flagLift = THREE.MathUtils.damp(courseRuntime.flagLift, out ? 1 : 0, 6, dt);
       root.position.y = courseRuntime.flagLift * 1.6; root.visible = courseRuntime.flagLift < .97;
+      // far away, the flag grows so it still reads as a flag from the tee (normal size once you're close)
+      const far = camera.position.distanceTo(currentHole.pin); const grow = THREE.MathUtils.clamp(far / 75, 1, 3.2); root.scale.setScalar(THREE.MathUtils.damp(root.scale.x, grow, 4, dt));
       root.traverse(o => { if (o.material) { o.material.transparent = courseRuntime.flagLift > .01; o.material.opacity = 1 - courseRuntime.flagLift; } });
     }
     function updateVisuals(frameDt, now) {
-      courseRuntime.waterMaterials.forEach(m => { m.uniforms.uTime.value = now / 1000; }); updateBallPrompt(); updateTouchUI(frameDt); updateShotFeel(frameDt); mpTick(gameFlow.mode === 'paused' ? 0 : frameDt); clouds.children.forEach(c => { c.position.x += c.userData.speed * frameDt; if (c.position.x > 460) c.position.x = -460; }); updateScenery(gameFlow.mode === 'paused' ? 0 : frameDt); updateGreenFlow(gameFlow.mode === 'paused' ? 0 : frameDt); updateLandingMarker(now); updateTracer(gameFlow.mode === 'paused' ? 0 : frameDt); updateHazardSequence(gameFlow.mode === 'paused' ? 0 : frameDt);
+      courseRuntime.waterMaterials.forEach(m => { m.uniforms.uTime.value = now / 1000; }); updateBallPrompt(); updateTouchUI(frameDt); updateShotFeel(frameDt); mpTick(gameFlow.mode === 'paused' ? 0 : frameDt); clouds.children.forEach(c => { c.position.x += c.userData.speed * frameDt; if (c.position.x > 460) c.position.x = -460; }); updateScenery(gameFlow.mode === 'paused' ? 0 : frameDt); updateGreenFlow(gameFlow.mode === 'paused' ? 0 : frameDt); updateLandingMarker.pinBox = updatePinMarker(); updateLandingMarker(now); updateTracer(gameFlow.mode === 'paused' ? 0 : frameDt); updateHazardSequence(gameFlow.mode === 'paused' ? 0 : frameDt);
       updateCupDrop(gameFlow.mode === 'paused' ? 0 : frameDt); updatePuttingFlag(frameDt); ballShadow.visible = !cupDrop;
       ball.position.copy(ballState.position); ballShadow.position.set(ballState.position.x, ballState.position.y - ballRadius + .012, ballState.position.z); const height = Math.max(0, ballState.position.y - (surfaceInfoAt(ballState.position.x, ballState.position.z).height + ballRadius)); const shadowScale = THREE.MathUtils.clamp(1.55 - height * .11, .55, 1.55); ballShadow.scale.set(shadowScale, shadowScale, shadowScale); ballShadow.material.opacity = THREE.MathUtils.clamp(.25 - height * .018, .06, .25);
       updateStandardCamera(frameDt); positionSwingHud(); updateAimVisuals(); updateTrajectoryPreview(frameDt); updateAddressPrompt(); updateHud(); updateMinimap(); updateEffects(gameFlow.mode === 'paused' ? 0 : frameDt); updateFlag(now);
