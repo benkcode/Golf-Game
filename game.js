@@ -71,7 +71,7 @@
       preview: { enabled: true, toggleKey: 'p', sampleEverySteps: 3, maxSteps: 900 },
       scoring: { cupDiameterMeters: .5, cupRadiusMeters: .25, holeCaptureSpeed: 1.35, cupPullRadius: .45, cupPullStrength: .9, cupDropSeconds: .45, maxScoreMultiplier: 2, skipHoleKey: 'n' },
       hazards: { waterSinkSeconds: 1.1, dropDelaySeconds: 1.6, dropSeconds: .7, dropClearanceMeters: 2, sandOnlyWedge: true },
-      greens: { slopeGravity: 9, shadeExaggeration: 7, flowDots: 340, previewShare: .5 },
+      greens: { slopeGravity: 9, bakedShade: false, shadeExaggeration: 7, flowDots: 340, previewShare: .5 },
       putting: { rangePerDistance: 1.6, rangeExtraMeters: 1.5, minRangeMeters: 4, aimPastCupMeters: .3, pullFlagOnGreen: true },
       camera: {
         thirdPersonOffset: { x: 3.1, y: 2.55, z: 4.9 },
@@ -245,25 +245,42 @@
     const beamTexture = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 128; const g = c.getContext('2d'); const grad = g.createLinearGradient(0, 128, 0, 0); grad.addColorStop(0, 'rgba(255,230,102,.9)'); grad.addColorStop(1, 'rgba(255,230,102,0)'); g.fillStyle = grad; g.fillRect(0, 0, 4, 128); return new THREE.CanvasTexture(c); })();
     const landingBeam = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 6, 16, 1, true), new THREE.MeshBasicMaterial({ map: beamTexture, transparent: true, depthWrite: false, side: THREE.DoubleSide })); landingBeam.position.y = 3; landingMarker.add(landingBeam);
     // Shot tracer: a smooth glowing ribbon that follows the ball through the air
-    const tracerTexture = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 32; const g = c.getContext('2d'); const along = g.createLinearGradient(0, 0, 256, 0); along.addColorStop(0, 'rgba(255,255,255,0)'); along.addColorStop(.35, 'rgba(255,255,255,.55)'); along.addColorStop(1, 'rgba(255,255,255,1)'); g.fillStyle = along; g.fillRect(0, 0, 256, 32); g.globalCompositeOperation = 'destination-in'; const across = g.createLinearGradient(0, 0, 0, 32); across.addColorStop(0, 'rgba(0,0,0,0)'); across.addColorStop(.3, 'rgba(0,0,0,1)'); across.addColorStop(.7, 'rgba(0,0,0,1)'); across.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = across; g.fillRect(0, 0, 256, 32); return new THREE.CanvasTexture(c); })();
+    const tracerTexture = (() => { const c = document.createElement('canvas'); c.width = 256; c.height = 32; const g = c.getContext('2d'); const along = g.createLinearGradient(0, 0, 256, 0); along.addColorStop(0, 'rgba(255,255,255,0)'); along.addColorStop(.35, 'rgba(255,255,255,.55)'); along.addColorStop(1, 'rgba(255,255,255,1)'); g.fillStyle = along; g.fillRect(0, 0, 256, 32); g.globalCompositeOperation = 'destination-in'; const across = g.createLinearGradient(0, 0, 0, 32); across.addColorStop(0, 'rgba(0,0,0,0)'); across.addColorStop(.22, 'rgba(0,0,0,.45)'); across.addColorStop(.4, 'rgba(0,0,0,1)'); across.addColorStop(.6, 'rgba(0,0,0,1)'); across.addColorStop(.78, 'rgba(0,0,0,.45)'); across.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = across; g.fillRect(0, 0, 256, 32); return new THREE.CanvasTexture(c); })();
     const tracer = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: CONFIG.tracer.color, map: tracerTexture, transparent: true, depthWrite: false, side: THREE.DoubleSide })); tracer.frustumCulled = false; tracer.renderOrder = 4; tracer.visible = false;
     const tracerState = { points: [], accumulator: 0, linger: 0 };
-    scene.add(previewPoints, tracer);
+    // the tracer is two ribbons: a wide soft halo in the shot's colour and a thin bright core, both tapering to a fine tail, plus a glow on the ball
+    const tracerGlow = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: CONFIG.tracer.color, map: tracerTexture, transparent: true, opacity: .4, depthWrite: false, side: THREE.DoubleSide })); tracerGlow.frustumCulled = false; tracerGlow.renderOrder = 3; tracerGlow.visible = false;
+    const tracerHead = new THREE.Sprite(new THREE.SpriteMaterial({ map: (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'); const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.25, 'rgba(255,255,255,.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })(), color: CONFIG.tracer.color, transparent: true, depthWrite: false })); tracerHead.renderOrder = 5; tracerHead.visible = false;
+    const tracerGround = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0x173d24, map: tracerTexture, transparent: true, opacity: .26, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -12 })); tracerGround.frustumCulled = false; tracerGround.renderOrder = 2; tracerGround.visible = false;
+    const tracerGroundPts = [];
+    scene.add(previewPoints, tracer, tracerGlow, tracerHead, tracerGround);
     // flat ribbon that follows a list of points just above the grass
     const _ribbonT = new THREE.Vector3(), _ribbonS = new THREE.Vector3();
-    function ribbonGeometry(points, width, geometry) {
-      const n = points.length; const pos = new Float32Array(n * 6), uv = new Float32Array(n * 4), idx = []; let along = 0;
+    // Flat ribbon along a list of points. Buffers are reused frame to frame (no new arrays while the ball flies),
+    // each point remembers whether it's in the air, and "taper" makes the tail thinner than the head.
+    function ribbonGeometry(points, width, geometry, taper = 0) {
+      const n = points.length; let buf = geometry.userData.rib;
+      if (!buf || buf.cap < n) {
+        const cap = Math.max(64, Math.ceil(n * 1.5)); buf = { cap, pos: new Float32Array(cap * 6), uv: new Float32Array(cap * 4) };
+        const idx = new Uint32Array((cap - 1) * 6); for (let i = 0; i < cap - 1; i += 1) { const k = i * 6, v = i * 2; idx[k] = v; idx[k + 1] = v + 1; idx[k + 2] = v + 2; idx[k + 3] = v + 1; idx[k + 4] = v + 3; idx[k + 5] = v + 2; }
+        const pa = new THREE.BufferAttribute(buf.pos, 3), ua = new THREE.BufferAttribute(buf.uv, 2); pa.setUsage(THREE.DynamicDrawUsage); ua.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('position', pa); geometry.setAttribute('uv', ua); geometry.setIndex(new THREE.BufferAttribute(idx, 1)); geometry.userData.rib = buf;
+      }
+      const pos = buf.pos, uv = buf.uv; let along = 0;
       for (let i = 0; i < n; i += 1) {
         const a = points[Math.max(0, i - 1)], b = points[Math.min(n - 1, i + 1)]; const p = points[i];
         const tangent = _ribbonT.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
-        const airborne = p.y - surfaceInfoAt(p.x, p.z).height > .25;
-        const side = airborne ? _ribbonS.subVectors(camera.position, p).cross(tangent).normalize() : _ribbonS.set(-tangent.z, 0, tangent.x).normalize();
-        const sx = side.x * width / 2, sy = side.y * width / 2, sz = side.z * width / 2;
+        if (p._air === undefined) p._air = p.y - surfaceInfoAt(p.x, p.z).height > .25;
+        const side = p._air ? _ribbonS.subVectors(camera.position, p).cross(tangent).normalize() : _ribbonS.set(-tangent.z, 0, tangent.x).normalize();
+        const w = width * (taper ? 1 - taper + taper * (n > 1 ? i / (n - 1) : 1) : 1) / 2;
+        const sx = side.x * w, sy = side.y * w, sz = side.z * w;
         if (i > 0) along += p.distanceTo(points[i - 1]);
-        pos.set([p.x + sx, p.y + sy, p.z + sz, p.x - sx, p.y - sy, p.z - sz], i * 6); uv.set([along, 0, along, 1], i * 4);
-        if (i < n - 1) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+        const k = i * 6; pos[k] = p.x + sx; pos[k + 1] = p.y + sy; pos[k + 2] = p.z + sz; pos[k + 3] = p.x - sx; pos[k + 4] = p.y - sy; pos[k + 5] = p.z - sz;
+        const u = i * 4; uv[u] = along; uv[u + 1] = 0; uv[u + 2] = along; uv[u + 3] = 1;
       }
-      geometry.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geometry.setIndex(idx); geometry.computeBoundingSphere(); return along;
+      geometry.attributes.position.needsUpdate = true; geometry.attributes.uv.needsUpdate = true; geometry.setDrawRange(0, Math.max(0, (n - 1) * 6));
+      if (!geometry.boundingSphere) geometry.boundingSphere = new THREE.Sphere(); if (n) { const mid = points[n >> 1]; geometry.boundingSphere.center.copy(mid); geometry.boundingSphere.radius = along + width + 2; }
+      return along;
     }
 
     // Reusable VFX pools avoid creating Three.js materials during play.
@@ -326,7 +343,9 @@
             if (!AudioContextClass) return null;
             this.context = new AudioContextClass();
             this.master = this.context.createGain(); this.sfx = this.context.createGain(); this.ambience = this.context.createGain();
-            this.sfx.connect(this.master); this.ambience.connect(this.master); this.master.connect(this.context.destination);
+            this.sfx.connect(this.master); this.ambience.connect(this.master);
+            // a gentle limiter on the way out: cheers + music + a hit at once never jump out louder than the rest
+            const limiter = this.context.createDynamicsCompressor(); limiter.threshold.value = -16; limiter.knee.value = 12; limiter.ratio.value = 5; limiter.attack.value = .003; limiter.release.value = .2; this.master.connect(limiter).connect(this.context.destination);
             const sampleRate = this.context.sampleRate; this.noiseBuffer = this.context.createBuffer(1, sampleRate, sampleRate);
             const channel = this.noiseBuffer.getChannelData(0); for (let i = 0; i < channel.length; i += 1) channel[i] = Math.random() * 2 - 1;
             const source = this.context.createBufferSource(); const filter = this.context.createBiquadFilter();
@@ -359,10 +378,18 @@
         gain.gain.setValueAtTime(.0001, start); gain.gain.exponentialRampToValueAtTime(Math.max(.0002, volume), start + .012); gain.gain.exponentialRampToValueAtTime(.0001, start + duration);
         source.connect(filter).connect(gain).connect(this.sfx); source.start(start, Math.random() * .65, duration + .03); source.stop(start + duration + .04);
       },
-      clubHit(perfect) { this.noise(.07, perfect ? .22 : .15, perfect ? 2700 : 1700); this.tone(perfect ? 1180 : 720, .09, perfect ? .16 : .11, 'triangle', 0, perfect ? 1550 : 580); },
+      // the strike sounds different for every kind of contact: crisp for pure, dull thud for a fat or topped shot, a soft tock for putts
+      clubHit(kind) {
+        if (kind === true) kind = 'pure'; else if (kind === false || !kind) kind = 'great';
+        if (kind === 'putt') { this.tone(1250, .05, .13, 'triangle', 0, 1100); this.noise(.03, .07, 3200); return; }
+        if (kind === 'pure') { this.noise(.07, .2, 2700); this.tone(1180, .09, .15, 'triangle', 0, 1550); return; }
+        if (kind === 'great') { this.noise(.07, .2, 1900); this.tone(760, .09, .15, 'triangle', 0, 640); return; }
+        if (kind === 'miss') { this.noise(.08, .19, 1300); this.tone(520, .1, .13, 'triangle', 0, 400); return; }
+        this.noise(.11, .15, 620); this.tone(170, .14, .13, 'sine', 0, 110); // bad: fat or topped
+      },
       landing(surface) {
         if (surface === 'sand') { this.noise(.2, .18, 520); this.tone(105, .16, .1, 'sine', 0, 70); }
-        else { this.noise(.1, surface === 'green' ? .07 : .11, surface === 'green' ? 900 : 1250); }
+        else { this.noise(.1, surface === 'green' ? .17 : .2, surface === 'green' ? 900 : 1250); } // levels matched by measurement: every effect lands within a few dB
       },
       splash() { this.noise(.34, .21, 1050); this.tone(190, .24, .08, 'sine', 0, 95); },
       cup() { this.tone(940, .12, .14, 'sine'); this.tone(610, .18, .12, 'sine', .1, 420); },
@@ -738,6 +765,7 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
         // collar line where the green meets the fringe
         ctx.strokeStyle = hexCss(look.greenEdge); ctx.lineWidth = W * .004; outline(ctx, 0); ctx.stroke();
         // baked low side-light so every crown, bowl and tier reads at a glance
+        if (!CONFIG.greens.bakedShade) return; // greens are one even colour now; the slope shows in the flowing dots while putting
         const N = 256, shade = document.createElement('canvas'); shade.width = shade.height = N; const sc = shade.getContext('2d'); const img = sc.createImageData(N, N); const d = img.data;
         const L = new THREE.Vector3(-.66, .45, .6).normalize(); const E = CONFIG.greens.shadeExaggeration; const n = new THREE.Vector3();
         for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) {
@@ -745,10 +773,12 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
           n.set(-gr.x * E, 1, -gr.z * E).normalize(); const lit = n.dot(L) / L.y - 1; const v = THREE.MathUtils.clamp(128 + Math.sign(lit) * Math.pow(Math.abs(lit), .55) * 95, 40, 215); /* gentle slopes show, steep faces don't blow out */ const i = (y * N + x) * 4; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
         }
         sc.putImageData(img, 0, 0);
-        ctx.save(); outline(ctx, .15); ctx.clip(); ctx.globalCompositeOperation = 'soft-light'; ctx.imageSmoothingEnabled = true; ctx.drawImage(shade, 0, 0, W, W); ctx.globalAlpha = .6; ctx.drawImage(shade, 0, 0, W, W); ctx.restore();
+        if (CONFIG.greens.bakedShade) { ctx.save(); outline(ctx, .15); ctx.clip(); ctx.globalCompositeOperation = 'soft-light'; ctx.imageSmoothingEnabled = true; ctx.drawImage(shade, 0, 0, W, W); ctx.globalAlpha = .6; ctx.drawImage(shade, 0, 0, W, W); ctx.restore(); }
       });
       const RINGS = 48;
-      groundGrid(RINGS, SEG, (i, j) => { const a = j / SEG * Math.PI * 2; const r = (i / RINGS) * (edge[j] + g.fringeMeters + .45); const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; return { x, z, u: .5 + (x - cx) / (2 * S), v: .5 + (z - cz) / (2 * S) }; }, .07, withHazards(overlayMaterial(map, 4), hole, 'overlay'), true);
+      const greenMesh = groundGrid(RINGS, SEG, (i, j) => { const a = j / SEG * Math.PI * 2; const r = (i / RINGS) * (edge[j] + g.fringeMeters + .45); const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; return { x, z, u: .5 + (x - cx) / (2 * S), v: .5 + (z - cz) / (2 * S) }; }, .07, withHazards(overlayMaterial(map, 4), hole, 'overlay'), true);
+      // light it as if flat, so slopes don't turn parts of the green lighter or darker
+      const nrm = greenMesh.geometry.attributes.normal; for (let k = 0; k < nrm.count; k += 1) nrm.setXYZ(k, 0, nrm.getY(k) < 0 ? -1 : 1, 0); nrm.needsUpdate = true; // keep each normal's side (the mesh is built facing down and drawn two-sided), only straighten it
     }
     function makeTee(hole) {
       const teeY = terrainHeightAt(0, CONFIG.world.teeZ, hole);
@@ -905,20 +935,34 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const y = greenHeightAt(hole.pin.x, hole.pin.z, hole); const H = CONFIG.courseVisuals.flagHeightMeters;
       const pin = new THREE.Group(); pin.position.set(hole.pin.x, y, hole.pin.z);
       const poleGroup = new THREE.Group(); pin.add(poleGroup);
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(.02, .024, H, 24), new THREE.MeshStandardMaterial({ color: 0xfafaf5, roughness: .28, metalness: .05 }));
-      pole.position.y = H / 2; pole.castShadow = true; poleGroup.add(pole);
-      [[.18, 0xe44b3a], [.62, 0xe44b3a], [1.06, 0xe44b3a]].forEach(([h, c]) => { const band = new THREE.Mesh(new THREE.CylinderGeometry(.0215, .0215, .12, 24), new THREE.MeshStandardMaterial({ color: c, roughness: .35 })); band.position.y = h; poleGroup.add(band); });
-      const cap = new THREE.Mesh(new THREE.SphereGeometry(.045, 24, 16), new THREE.MeshStandardMaterial({ color: 0xf2c14e, roughness: .25, metalness: .6 })); cap.position.y = H + .02; poleGroup.add(cap);
-      // flag cloth with the hole number
-      const flagTex = lookTexture(`flag-${hole.number}`, 256, 160, (g, w, h) => {
-        const grad = g.createLinearGradient(0, 0, w, 0); grad.addColorStop(0, '#f2584a'); grad.addColorStop(1, '#e03a2e'); g.fillStyle = grad; g.fillRect(0, 0, w, h);
-        g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, h - 22, w, 8);
-        g.fillStyle = '#ffffff'; g.beginPath(); g.arc(w * .46, h * .46, 46, 0, Math.PI * 2); g.fill();
-        g.fillStyle = '#e03a2e'; g.font = '900 64px system-ui, -apple-system, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(hole.number), w * .46, h * .48);
-      });
-      const flagGeometry = new THREE.PlaneGeometry(.95, .6, 28, 10);
-      const flag = new THREE.Mesh(flagGeometry, new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide, roughness: .7 }));
-      flag.position.set(.47, H - .34, 0); flag.rotation.y = Math.PI / 2; flag.castShadow = true; poleGroup.add(flag);
+      // flagstick: glossy white fibreglass, two thin red rings up top, a brass ferrule at the base and a round white tip
+      const white = new THREE.MeshStandardMaterial({ color: 0xfbfbf6, roughness: .22, metalness: .05 });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(.021, .025, H, 24), white); pole.position.y = H / 2; pole.castShadow = true; poleGroup.add(pole);
+      const ringMat = new THREE.MeshStandardMaterial({ color: 0xd7362b, roughness: .35 });
+      [H - .86, H - .8].forEach(h => { const ring = new THREE.Mesh(new THREE.CylinderGeometry(.0225, .0225, .025, 24), ringMat); ring.position.y = h; poleGroup.add(ring); });
+      const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(.027, .027, .07, 24), new THREE.MeshStandardMaterial({ color: 0xc9a14a, roughness: .3, metalness: .7 })); ferrule.position.y = .035; poleGroup.add(ferrule);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(.036, 24, 16), white); cap.position.y = H + .015; poleGroup.add(cap);
+      // the flag: a red swallowtail with a cream stitched border, a cream sleeve round the pole and the hole number in the game's serif
+      const FW = 1.08, FH = .7;
+      const drawFlag = (g, w, h, mirrorText = false) => {
+        g.clearRect(0, 0, w, h); const notch = w * .16; const shape = () => { g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0); g.lineTo(w - notch, h / 2); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); };
+        g.save(); shape(); g.clip();
+        const cloth = g.createLinearGradient(0, 0, w, 0); cloth.addColorStop(0, '#e8483a'); cloth.addColorStop(1, '#c92f25'); g.fillStyle = cloth; g.fillRect(0, 0, w, h);
+        const sheen = g.createLinearGradient(0, 0, 0, h); sheen.addColorStop(0, 'rgba(255,255,255,.12)'); sheen.addColorStop(.5, 'rgba(255,255,255,0)'); sheen.addColorStop(1, 'rgba(0,0,0,.12)'); g.fillStyle = sheen; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#f7efd9'; g.fillRect(0, 0, w * .075, h); // sleeve
+        g.strokeStyle = 'rgba(247,239,217,.9)'; g.lineWidth = h * .018; g.setLineDash([h * .04, h * .03]); const m = h * .07; g.beginPath(); g.moveTo(w * .075 + m, m); g.lineTo(w - m * 1.2, m); g.lineTo(w - notch - m * .9, h / 2); g.lineTo(w - m * 1.2, h - m); g.lineTo(w * .075 + m, h - m); g.closePath(); g.stroke(); g.setLineDash([]);
+        g.fillStyle = '#f7efd9'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `900 ${Math.round(h * .56)}px "YB Serif", Georgia, serif`; g.shadowColor = 'rgba(80,10,5,.35)'; g.shadowOffsetY = h * .02; g.translate(w * .47, h * .54); if (mirrorText) g.scale(-1, 1); g.fillText(String(hole.number), 0, 0); // the back of the cloth gets its own, so the number never reads backwards
+        g.restore();
+      };
+      const flagTex = lookTexture(`flag-v2-${hole.number}`, 512, 332, drawFlag), flagBackTex = lookTexture(`flag-v2b-${hole.number}`, 512, 332, (g, w, h) => drawFlag(g, w, h, true));
+      if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => { [[flagTex, false], [flagBackTex, true]].forEach(([t, m]) => { drawFlag(t.image.getContext('2d'), t.image.width, t.image.height, m); t.needsUpdate = true; }); });
+      const flagGeometry = new THREE.PlaneGeometry(FW, FH, 30, 10);
+      const flag = new THREE.Mesh(flagGeometry, new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.FrontSide, roughness: .75, alphaTest: .5 }));
+      const flagBack = new THREE.Mesh(flagGeometry, new THREE.MeshStandardMaterial({ map: flagBackTex, side: THREE.BackSide, roughness: .75, alphaTest: .5 }));
+      flag.customDepthMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: flagTex, alphaTest: .5, side: THREE.DoubleSide }); // the shadow has the swallowtail too
+      // the sleeve edge sits on the pole (the plane is turned 90°, so it hangs off along -z)
+      flag.position.set(0, H - FH / 2 - .03, -FW / 2 - .018); flag.rotation.y = Math.PI / 2; flag.castShadow = true; flagBack.position.copy(flag.position); flagBack.rotation.copy(flag.rotation);
+      poleGroup.add(flag, flagBack); courseRuntime.flagHalfW = FW / 2;
       // the cup: a dark hole with a white liner and a soft inner wall
       const cupR = CONFIG.scoring.cupRadiusMeters; const cupTop = CONFIG.courseVisuals.cartoon.surfaceLift.green + .004;
       const holeTex = lookTexture('cup-hd', 512, 512, (g, w) => { const r = w / 2; const grad = g.createRadialGradient(r, r * .78, r * .1, r, r, r); grad.addColorStop(0, '#020403'); grad.addColorStop(.62, '#08110a'); grad.addColorStop(.9, '#1c2b1e'); grad.addColorStop(1, '#2e4230'); g.fillStyle = grad; g.beginPath(); g.arc(r, r, r, 0, Math.PI * 2); g.fill(); const wall = g.createLinearGradient(0, 0, 0, w); wall.addColorStop(0, 'rgba(120,150,120,.25)'); wall.addColorStop(.35, 'rgba(0,0,0,0)'); g.fillStyle = wall; g.beginPath(); g.arc(r, r, r * .98, Math.PI, Math.PI * 2); g.fill(); });
@@ -977,12 +1021,13 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function makeCartPath(hole) {
       const P = CONFIG.courseVisuals.cartoon.cartPath; const maxOff = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters - 3; const step = 1.5;
-      const start = -8, end = hole.lengthMeters - hole.green.radiusMeters - hole.green.fringeMeters - 4;
+      // starts just in front of the tee box, out to the side (it used to begin behind the tee, where the centre line has no direction, so it cut straight across the tee)
+      const start = CONFIG.world.teeDepthMeters + 4, end = hole.lengthMeters - hole.green.radiusMeters - hole.green.fringeMeters - 4;
       const build = side => {
         const pts = []; let blocked = 0;
         for (let d = start; d <= end; d += step) {
-          const c = fairwayCenterAtDistance(d, hole), n = fairwayCenterAtDistance(d + 1, hole), b = fairwayCenterAtDistance(d - 1, hole);
-          const dir = new THREE.Vector2(n.x - b.x, n.z - b.z).normalize(); const nx = -dir.y, nz = dir.x;
+          const c = fairwayCenterAtDistance(d, hole), n = fairwayCenterAtDistance(d + 1, hole), b = fairwayCenterAtDistance(Math.max(0, d - 1), hole);
+          const dir = new THREE.Vector2(n.x - b.x, n.z - b.z); if (dir.lengthSq() < 1e-6) dir.set(0, -1); dir.normalize(); const nx = -dir.y, nz = dir.x;
           let off = hole.fairwayWidthMeters / 2 + P.offset + Math.sin(d * .035 + hole.number) * P.wiggle;
           while (off < maxOff && inAnyHazard(hole, c.x + nx * side * off, c.z + nz * side * off)) off += 1;   // curve around ponds and bunkers
           if (inAnyHazard(hole, c.x + nx * side * off, c.z + nz * side * off)) blocked += 1;
@@ -1325,7 +1370,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function currentClub() { return CONFIG.clubs[currentClubName]; }
     // swing: both hands on the grip, face toward the target. carry: held in the right hand, pointing forward
     function holdClub(mode) {
-      const model = clubModels[currentClub().model]; if (!model || golfer.clubMode === mode) return; golfer.clubMode = mode;
+      const model = clubModels[clubKey(currentClub().model)]; if (!model || golfer.clubMode === mode) return; golfer.clubMode = mode;
       if (mode === 'swing') { golfer.clubRoot.add(model); model.rotation.set(0, Math.PI / 2, 0); model.position.set(0, (golfer.clubSoleOffset || 0) + (model.userData.soleFix || 0), 0); }
       else { golfer.carryHolder.add(model); model.rotation.set(1.05, 0, 0); model.position.set(0, .02, 0); }
     }
@@ -1379,16 +1424,20 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     // The golfer holds the cartoon club model for the selected club (built once, then reused)
     const clubModels = {};
+    // the girl golfer carries the limited edition pink set; everyone sees it (her own screen, friends' screens, replays)
+    function clubEdition(character) { return character === 'girl' ? 'pink' : undefined; }
+    function clubKey(model, character = golfer.character) { return `${model}:${clubEdition(character) || 'std'}`; }
+    function buildClubModel(modelName, character) {
+      const model = GolfClubs.createClub(modelName, { headScale: CONFIG.clubModel.headScale, length: CONFIG.clubModel.lengthToGround, flatSole: true, edition: clubEdition(character) });
+      model.traverse(o => { if (o.isMesh && o.name !== 'outline') o.castShadow = true; });
+      // lofted faces can dip below the sole: measure the real lowest point once and lift the club by that much
+      model.updateMatrixWorld(true); const low = new THREE.Box3().setFromObject(model.userData.head).min.y; model.userData.soleFix = -CONFIG.clubModel.lengthToGround - low;
+      return model;
+    }
     function updateClubVisual() {
       const club = currentClub(); golfer.clubRoot.clear();
-      if (!clubModels[club.model]) {
-        const model = GolfClubs.createClub(club.model, { headScale: CONFIG.clubModel.headScale, length: CONFIG.clubModel.lengthToGround, flatSole: true });
-        model.traverse(o => { if (o.isMesh && o.name !== 'outline') o.castShadow = true; });
-        // lofted faces can dip below the sole: measure the real lowest point once and lift the club by that much
-        model.updateMatrixWorld(true); const low = new THREE.Box3().setFromObject(model.userData.head).min.y; model.userData.soleFix = -CONFIG.clubModel.lengthToGround - low;
-        clubModels[club.model] = model;
-      }
-      golfer.carryHolder.clear(); golfer.clubRoot.add(clubModels[club.model]); golfer.clubMode = null;
+      const key = clubKey(club.model); if (!clubModels[key]) clubModels[key] = buildClubModel(club.model, golfer.character);
+      golfer.carryHolder.clear(); golfer.clubRoot.add(clubModels[key]); golfer.clubMode = null;
     }
 
     function holeTotal() { return holeState.strokes + holeState.penalties; }
@@ -1431,7 +1480,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         let rank = null, players = null;
         if (mode === 'solo') { const r = await fetch('/api/score', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: settings.playerName || 'Golfer', holes, character: settings.character, device: deviceId(), roundId: id }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || 'save failed'); rank = d.rank; players = d.players; }
         else { await new Promise(res => setTimeout(res, 600)); const d = await (await fetch(`/api/leaderboard?period=all&limit=1&device=${encodeURIComponent(deviceId())}`)).json(); rank = d.me && d.me.rank; players = d.players; }
-        showCardRank(rank ? `🏆 You’re <b>#${rank}</b> of ${players} golfers all-time <button type="button">Leaderboard</button>` : `Round saved <button type="button">Leaderboard</button>`);
+        showCardRank(rank ? `You’re <b>#${rank}</b> of ${players} golfers all-time <button type="button">Leaderboard</button>` : `Round saved <button type="button">Leaderboard</button>`);
       } catch (e) { showCardRank('Saved to <b>My rounds</b> on this device (the leaderboard server couldn’t be reached).'); }
     }
     let boardPeriod = 'all';
@@ -1475,7 +1524,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       $('setting-music-value').textContent = `${Math.round(settings.musicVolume * 100)}%`; $('setting-camera-value').textContent = `${settings.cameraSensitivity.toFixed(1)}×`;
     }
     function applySettings() {
-      previewEnabled = settings.trajectoryPreview; previewClock = 1; $('toggle-preview').textContent = `Preview ${previewEnabled ? 'ON' : 'OFF'} · P`; audioEngine.applySettings(); syncSettingsUI(); saveSettings();
+      previewEnabled = settings.trajectoryPreview; previewClock = 1; $('toggle-preview').textContent = `Shot preview: ${previewEnabled ? 'on' : 'off'}`; $('toggle-preview').title = 'Show or hide the dotted ball flight (P)'; audioEngine.applySettings(); syncSettingsUI(); saveSettings();
     }
     function clearHeldInputs() { Object.keys(movement.keys).forEach(key => { movement.keys[key] = false; }); movement.velocity.set(0, 0, 0); movement.moving = false; if (swing.phase === 'power' && !swingAnimation.active) resetSwingMeter(); else swing.holdActive = false; }
     function hideMenuScreens() { ['main-menu', 'lobby-menu', 'board-menu', 'how-menu', 'settings-menu', 'pause-menu', 'confirm-restart'].forEach(id => { $(id).hidden = true; }); }
@@ -1507,40 +1556,47 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function startNewRound() { const nm = $('player-name').value.trim(); if (nm) { settings.playerName = nm; applySettings(); } audioEngine.ensure(); hideMenuScreens(); document.body.classList.remove('menu-open'); restartRound(true); }
 
     // ---------- first-hole tutorial: each step waits until the player has actually done it ----------
-    const K = (...keys) => keys.map(k => `<kbd${k.length > 2 ? ' class="wide"' : ''}>${k}</kbd>`).join('');
+    // key caps show the player's real keyboard: on AZERTY the walk keys are Z Q S D, and so on (Chrome/Edge report the layout)
+    const keyLabels = { KeyW: 'W', KeyA: 'A', KeyS: 'S', KeyD: 'D', KeyE: 'E', KeyF: 'F', KeyR: 'R', KeyP: 'P' };
+    const kl = code => keyLabels[code] || code;
+    try { if (navigator.keyboard && navigator.keyboard.getLayoutMap) navigator.keyboard.getLayoutMap().then(map => { let changed = false; Object.keys(keyLabels).forEach(code => { const v = map.get(code); if (v && v.length === 1 && v.toUpperCase() !== keyLabels[code]) { keyLabels[code] = v.toUpperCase(); changed = true; } }); if (changed) refreshKeyLabels(); }).catch(() => {}); } catch (e) {}
+    function refreshKeyLabels() { document.querySelectorAll('kbd[data-code]').forEach(k => { k.textContent = kl(k.dataset.code); }); if (tutorial.active) renderTutorialStep(); updateAddressPrompt(); }
+    const K = (...keys) => keys.map(k => { const code = /^[A-Z]$/.test(k) ? 'Key' + k : null; const label = code ? kl(code) : k; return `<kbd${label.length > 2 ? ' class="wide"' : ''}${code ? ` data-code="${code}"` : ''}>${label}</kbd>`; }).join('');
+    // a little mouse drawing with the button to use lit up (left / right) or arrows for sliding it
+    const M = (what = 'left') => `<svg class="mouse-ico" viewBox="0 0 24 34" width="22" height="31" aria-label="${what === 'move' ? 'move the mouse' : what + ' mouse button'}"><rect x="2" y="2" width="20" height="30" rx="10" fill="#fff" stroke="#172238" stroke-width="2.4"/><line x1="12" y1="2" x2="12" y2="13" stroke="#172238" stroke-width="2"/><line x1="2" y1="13" x2="22" y2="13" stroke="#172238" stroke-width="2"/>${what === 'left' ? '<path d="M3.2 12 V11 a8.8 8.8 0 0 1 7.6-8.7 V12 z" fill="#ffd23f"/>' : what === 'right' ? '<path d="M20.8 12 V11 a8.8 8.8 0 0 0 -7.6-8.7 V12 z" fill="#ffd23f"/>' : '<path d="M-6 22 l4 -3 v6 z M30 22 l-4 -3 v6 z" fill="#172238"/>'}</svg>`;
     const TUTORIAL_STEPS = [
-      { id: 'move', title: 'Walk around', keys: () => `${K('W', 'A', 'S', 'D')} <span>+</span> ${K('Shift')} <span>to jog</span>`, text: 'Use W A S D to walk your golfer. W always walks the way the camera is facing.', next: true, done: t => t.walked > 4 },
-      { id: 'look', title: 'Look around', keys: () => `${K('←', '→')} <span>or right-click and drag</span>`, text: 'Turn the camera to look down the hole. Find the flag in the distance.', next: true, done: t => t.turned > .6 },
-      { id: 'goto', title: 'Jump to your ball', keys: () => `${K('F')} <span>teleport</span>`, text: 'Press F to teleport straight to your ball. You arrive set up and aimed at the flag. (You can also walk up to it and press E.)', done: () => addressing },
-      { id: 'aim', title: 'Aim your shot', keys: () => `${K('A', 'D')} <span>or slide the mouse</span>`, text: 'The yellow line is your shot. The glowing target and the “Lands” tag show where the ball will come down. Keep it on the fairway.', next: true, done: t => t.aimMoved > .05 },
-      { id: 'club', title: 'Pick a club', keys: () => `${K('1', '2', '3', '4', '5')}`, text: 'Bigger clubs hit farther. The gold “Coach pick” badge always shows the best club for the shot. Off the tee that’s the Driver.', next: true, done: t => t.clubChanged },
-      { id: 'power', title: 'Swing: set your power', keys: () => `${K('Space')} <span>hold, then let go</span>`, text: 'Hold Space (or the mouse button) and watch the power bar fill. Let go when it’s as full as you want.', done: () => swing.phase === 'accuracy' || swingAnimation.active || ballState.inFlight },
-      { id: 'accuracy', title: 'Swing: hit it straight', keys: () => `${K('Space')} <span>again</span>`, text: 'Press again while the marker is inside the gold zone. The middle of the zone hits it dead straight.', done: () => swingAnimation.active || ballState.inFlight },
-      { id: 'watch', title: 'Follow your ball', keys: () => `${K('F')} <span>when it stops</span>`, text: 'Watch the yellow tracer. When the ball stops, press F to jump to it and play your next shot.', done: () => addressing && !ballState.inFlight && !swingAnimation.active },
-      { id: 'finish', title: 'You’re ready!', keys: () => `${K('R')} <span>restart hole</span> ${K('Esc')} <span>pause</span>`, text: 'Keep going until the ball drops in the cup. On the green the flag comes out and a dashed line on the power bar shows how hard to putt. Open “? Controls” anytime.', next: 'Let’s play', done: () => false }
+      { id: 'move', title: 'Walk', keys: () => `${K('W', 'A', 'S', 'D')} <span>+</span> ${K('Shift')} <span>jog</span>`, text: 'Walk toward the tee.', next: true, done: t => t.walked > 4 },
+      { id: 'look', title: 'Look around', keys: () => `${K('←', '→')} <span>or</span> ${M('right')} <span>drag</span>`, text: 'Find the flag.', next: true, done: t => t.turned > .6 },
+      { id: 'goto', title: 'Go to your ball', keys: () => `${K('F')}`, text: 'Jumps you to the ball, aimed at the flag.', done: () => addressing },
+      { id: 'aim', title: 'Aim', keys: () => `${K('A', 'D')} <span>or</span> ${M('move')}`, text: 'Keep the yellow line on the fairway.', next: true, done: t => t.aimMoved > .05 },
+      { id: 'club', title: 'Pick a club', keys: () => `${K('1', '2', '3', '4', '5')}`, text: 'Gold “Coach pick” = best club.', next: true, done: t => t.clubChanged },
+      { id: 'power', title: 'Set power', keys: () => `${K('Space')} <span>or</span> ${M('left')} <span>hold, let go</span>`, text: 'Let go when the bar is full enough.', done: () => swing.phase === 'accuracy' || swingAnimation.active || ballState.inFlight },
+      { id: 'accuracy', title: 'Hit it straight', keys: () => `${K('Space')} <span>or</span> ${M('left')} <span>again</span>`, text: 'Press when the bouncing marker is in the gold zone.', done: () => swingAnimation.active || ballState.inFlight },
+      { id: 'watch', title: 'Follow the ball', keys: () => `${K('F')} <span>when it stops</span>`, text: 'Jump to it for your next shot.', done: () => addressing && !ballState.inFlight && !swingAnimation.active },
+      { id: 'finish', title: 'You’re ready!', keys: () => `${K('Esc')} <span>pause</span>`, text: 'Hole it out. “Controls” lists every key.', next: 'Let’s play', auto: 5, done: () => false }
     ];
     // touch screens get their own tutorial: no keys, no walking
     const touchQuery = new URLSearchParams(location.search).get('touch');
     const touchMode = touchQuery === '1' || (touchQuery !== '0' && ((window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer: fine)').matches));
     const T = text => `<kbd class="wide">${text}</kbd>`;
     if (touchMode) TUTORIAL_STEPS.splice(0, TUTORIAL_STEPS.length,
-      { id: 'goto', title: 'Your ball', keys: () => T('automatic'), text: 'On a touch screen you’re placed at your ball for every shot, set up and aimed at the flag. No walking needed.', done: () => addressing },
-      { id: 'aim', title: 'Aim your shot', keys: () => `${T('drag ◀ ▶')} <span>on the course</span>`, text: 'Drag left or right anywhere on the course to turn. The yellow line and the “Lands” tag show where the ball will come down.', next: true, done: t => t.aimMoved > .05 },
-      { id: 'club', title: 'Pick a club', keys: () => `${T('tap a club')} <span>in the tray</span>`, text: 'Bigger clubs hit farther. The gold “Coach pick” badge always marks the best club for the shot. Swipe the tray to see them all.', next: true, done: t => t.clubChanged },
-      { id: 'power', title: 'Swing: set your power', keys: () => `${T('hold SWING')} <span>then let go</span>`, text: 'Press and hold the big yellow SWING button. The power bar fills; let go when it’s as full as you want.', done: () => swing.phase === 'accuracy' || swingAnimation.active || ballState.inFlight },
-      { id: 'accuracy', title: 'Swing: hit it straight', keys: () => `${T('tap SWING')} <span>in the gold zone</span>`, text: 'The button turns green. Tap it again while the marker is inside the gold zone. The middle of the zone hits it dead straight.', done: () => swingAnimation.active || ballState.inFlight },
-      { id: 'watch', title: 'Follow your ball', keys: () => T('sit back'), text: 'Watch the tracer. When the ball stops you’re taken straight to it for the next shot. Drag while it flies to look around.', done: () => addressing && !ballState.inFlight && !swingAnimation.active },
-      { id: 'finish', title: 'You’re ready!', keys: () => `${T('☰')} <span>pause · restart hole</span>`, text: 'Keep going until the ball drops. On the green, little dots flow downhill: aim a bit up the slope and use the “Your putt / Flag plays” numbers for speed.', next: 'Let’s play', done: () => false });
+      { id: 'goto', title: 'Your ball', keys: () => T('automatic'), text: 'You’re set up at your ball for every shot.', done: () => addressing },
+      { id: 'aim', title: 'Aim', keys: () => `${T('drag ◀ ▶')}`, text: 'Keep the yellow line on the fairway.', next: true, done: t => t.aimMoved > .05 },
+      { id: 'club', title: 'Pick a club', keys: () => `${T('tap a club')}`, text: 'Gold “Coach pick” = best club.', next: true, done: t => t.clubChanged },
+      { id: 'power', title: 'Set power', keys: () => `${T('hold SWING')} <span>let go</span>`, text: 'Let go when the bar is full enough.', done: () => swing.phase === 'accuracy' || swingAnimation.active || ballState.inFlight },
+      { id: 'accuracy', title: 'Hit it straight', keys: () => `${T('tap SWING')}`, text: 'Tap when the bouncing marker is in the gold zone.', done: () => swingAnimation.active || ballState.inFlight },
+      { id: 'watch', title: 'Follow the ball', keys: () => T('sit back'), text: 'You’re taken to it when it stops.', done: () => addressing && !ballState.inFlight && !swingAnimation.active },
+      { id: 'finish', title: 'You’re ready!', keys: () => `${T('☰')} <span>pause</span>`, text: 'Hole it out. On the green, dots flow downhill.', next: 'Let’s play', auto: 5, done: () => false });
     const tutorial = { active: false, step: 0, walked: 0, turned: 0, aimMoved: 0, clubChanged: false, lastYaw: 0, lastAim: 0, lastClub: null, doneTimer: 0 };
     function startTutorial() {
       Object.assign(tutorial, { active: true, step: 0, doneTimer: 0 }); resetTutorialProgress(); $('tip-toast').classList.remove('show'); onboarding.queue.length = 0; onboarding.active = null; renderTutorialStep();
     }
-    function resetTutorialProgress() { Object.assign(tutorial, { walked: 0, turned: 0, aimMoved: 0, clubChanged: false, lastYaw: cameraState.yaw, lastAim: aimAngleRadians, lastClub: currentClubName }); }
+    function resetTutorialProgress() { Object.assign(tutorial, { autoT: 0, walked: 0, turned: 0, aimMoved: 0, clubChanged: false, lastYaw: cameraState.yaw, lastAim: aimAngleRadians, lastClub: currentClubName }); }
     function renderTutorialStep() {
       const step = TUTORIAL_STEPS[tutorial.step]; const box = $('tutorial'); box.hidden = false; box.classList.remove('bump'); void box.offsetWidth; box.classList.add('bump');
       $('tut-step').textContent = `Step ${tutorial.step + 1} of ${TUTORIAL_STEPS.length}`; $('tut-title').textContent = step.title; $('tut-keys').innerHTML = step.keys(); $('tut-text').textContent = step.text;
       $('tut-dots').innerHTML = TUTORIAL_STEPS.map((_, i) => `<i class="${i < tutorial.step ? 'done' : i === tutorial.step ? 'on' : ''}"></i>`).join('');
-      $('tut-next').hidden = !step.next; $('tut-next').textContent = typeof step.next === 'string' ? step.next : 'Next'; $('tut-done').hidden = true;
+      $('tut-next').hidden = !step.next; $('tut-next').textContent = typeof step.next === 'string' ? step.next : 'Skip step'; $('tut-done').hidden = true;
     }
     function advanceTutorial() {
       if (!tutorial.active) return; tutorial.doneTimer = 0;
@@ -1565,6 +1621,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       // swung before finishing the earlier steps? skip ahead to 'follow your ball' instead of nagging
       if (['aim', 'club', 'power'].includes(id) && (swingAnimation.active || ballState.inFlight)) { tutorial.step = TUTORIAL_STEPS.findIndex(s => s.id === 'watch'); resetTutorialProgress(); renderTutorialStep(); return; }
       if (['aim', 'club', 'power', 'accuracy'].includes(id) && !addressing && !swingAnimation.active && !ballState.inFlight) { tutorial.step = TUTORIAL_STEPS.findIndex(s => s.id === 'goto'); resetTutorialProgress(); renderTutorialStep(); return; }
+      const cur = TUTORIAL_STEPS[tutorial.step]; if (cur.auto) { tutorial.autoT = (tutorial.autoT || 0) + dt; if (tutorial.autoT >= cur.auto) { endTutorial(); return; } } // the last card closes by itself
       if (tutorial.doneTimer > 0) { tutorial.doneTimer -= dt; if (tutorial.doneTimer <= 0) advanceTutorial(); return; }
       if (TUTORIAL_STEPS[tutorial.step].done(tutorial)) { $('tut-done').hidden = false; $('tut-next').hidden = true; tutorial.doneTimer = .9; audioEngine.ensure(); }
     }
@@ -1667,7 +1724,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const ranked = st.players.filter(p => !p.left).map(p => ({ p, t: playerTotals(p.scores, st.pars) })).sort((a, b) => a.t.total - b.t.total);
       if (st.phase === 'finished') {
         const best = ranked[0]; const tied = ranked.filter(r => r.t.total === best.t.total);
-        $('scorecard-title').innerHTML = `<span class="card-winner">${tied.length > 1 ? 'It’s a tie!' : (best.p.id === mp.myId ? '🏆 You win!' : `🏆 ${best.p.name.replace(/[<>&]/g, '')} wins!`)}</span>`;
+        $('scorecard-title').innerHTML = `<span class="card-winner">${tied.length > 1 ? 'It’s a tie!' : (best.p.id === mp.myId ? 'You win!' : `${best.p.name.replace(/[<>&]/g, '')} wins!`)}</span>`;
         $('scorecard-subtitle').textContent = `Lowest total wins · ${best.t.total} strokes (${formatToPar(best.t.toPar)})`;
         const host = st.hostId === mp.myId; $('next-hole').hidden = !host; $('next-hole').textContent = 'Play again'; $('card-leave').hidden = false; $('card-wait').textContent = host ? '' : 'The host can start another round.';
         if (best.p.id === mp.myId) audioEngine.cheer();
@@ -1688,6 +1745,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const t = playerTotals(scorecard.map(r => r.score), scorecard.map(r => r.par)); return { toPar: t.toPar, thru: t.thru, place: '' };
     }
     function applyCardMode(final) {
+      const sign = $('card-sign'); sign.hidden = !final; if (final) { const esc = t => String(t).replace(/[&<>"]/g, ''); sign.innerHTML = `Player <b>${esc(playerName())}</b> Date <b>${new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</b>`; }
       const mini = touchUI.compact && !final && !mp.viewingCard && !cardFullRequested; $('scorecard-overlay').classList.toggle('mini', mini); if (!mini) return;
       const me = myRoundStatus(); const hole = mp.active && mp.state ? mp.state.hole : currentHoleIndex; const mine = mp.active && mp.state ? (mp.state.players.find(p => p.id === mp.myId) || {}).scores?.[hole] : scorecard[currentHoleIndex].score; const par = mp.active && mp.state ? mp.state.pars[hole] : currentHole.par;
       $('scorecard-title').textContent = mine ? holeCheer(mine, par).main : `Hole ${hole + 1} complete`;
@@ -1701,12 +1759,18 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function ensureRemote(p) {
       let r = mp.remotes.get(p.id); if (r && r.character === p.character) return r; if (r) removeRemote(r);
       const g = buildGolfer(p.character); scene.add(g.root);
-      const club = GolfClubs.createClub('iron7', { headScale: CONFIG.clubModel.headScale, length: CONFIG.clubModel.lengthToGround, flatSole: true }); club.rotation.y = Math.PI / 2; g.clubRoot.add(club);
       const ballMesh = new THREE.Mesh(remoteBallGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .35 })); ballMesh.castShadow = true; scene.add(ballMesh);
       const halo = new THREE.Mesh(new THREE.RingGeometry(.14, .22, 32), new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: .9, depthWrite: false })); halo.rotation.x = -Math.PI / 2; scene.add(halo);
       const tag = document.createElement('div'); tag.className = 'player-tag'; tag.style.background = p.color; tag.textContent = p.name; $('player-tags').appendChild(tag);
-      r = { id: p.id, character: p.character, golfer: g, club, ball: ballMesh, halo, tag }; mp.remotes.set(p.id, r); return r;
+      r = { id: p.id, character: p.character, golfer: g, club: null, clubModel: null, ball: ballMesh, halo, tag }; setRemoteClub(r, 'iron7'); mp.remotes.set(p.id, r); return r;
     }
+    // show the club a friend is actually using (and in her colours if she plays the girl golfer)
+    function setRemoteClub(r, modelName) {
+      if (!GolfClubs.SPECS[modelName]) modelName = 'iron7'; if (r.clubModel === modelName && r.club) return;
+      if (r.club) r.golfer.clubRoot.remove(r.club); r.clubCache = r.clubCache || {}; const club = r.clubCache[modelName] || (r.clubCache[modelName] = buildClubModel(modelName, r.character)); club.rotation.set(0, Math.PI / 2, 0); club.position.set(0, club.userData.soleFix || 0, 0);
+      r.golfer.clubRoot.add(club); r.club = club; r.clubModel = modelName;
+    }
+    function remoteClubFor(clubName) { const c = CONFIG.clubs[clubName]; return c ? c.model : null; }
     function removeRemote(r) { scene.remove(r.golfer.root); scene.remove(r.ball); scene.remove(r.halo); r.tag.remove(); }
     const _rDown = new THREE.Vector3(0, -1, 0), _rDir = new THREE.Vector3();
     function poseRemote(g, angle, address) {
@@ -1729,7 +1793,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       mp.remotes.forEach((r, id) => { if (!keep.has(id)) { removeRemote(r); mp.remotes.delete(id); } });
       others.forEach((p, i) => { const r = ensureRemote(p); r.tag.textContent = p.name; if (mp.replay && mp.replay.active && mp.replay.playerId === p.id) return;
         const pos = remoteBallPos(p, i); const gone = p.holed || p.left || (p.done && st.phase === 'playing'); r.ball.visible = !gone; r.halo.visible = !gone; r.golfer.root.visible = !p.left && !(p.done && st.phase === 'playing');
-        r.ball.position.copy(pos); r.halo.position.set(pos.x, pos.y - ballRadius + .02, pos.z); const up = st.turnId === p.id && st.phase === 'playing'; placeRemoteAtBall(r, pos, up); poseRemote(r.golfer, 0, up); });
+        r.ball.position.copy(pos); r.halo.position.set(pos.x, pos.y - ballRadius + .02, pos.z); const up = st.turnId === p.id && st.phase === 'playing'; if (up && currentHole) setRemoteClub(r, remoteClubFor(suggestClub(pos))); placeRemoteAtBall(r, pos, up); poseRemote(r.golfer, 0, up); });
     }
     function updateRemoteTags() {
       mp.remotes.forEach(r => { const g = r.golfer.root; if (!g.visible) { r.tag.hidden = true; return; } const v = g.position.clone(); v.y += 2.35; v.project(camera); r.tag.hidden = v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1; r.tag.style.left = `${(v.x * .5 + .5) * window.innerWidth}px`; r.tag.style.top = `${(-v.y * .5 + .5) * window.innerHeight}px`; });
@@ -1739,22 +1803,22 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     const replayTracer = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: 0xffffff, map: replayTracerTexture, transparent: true, depthWrite: false, side: THREE.DoubleSide })); replayTracer.frustumCulled = false; replayTracer.visible = false; scene.add(replayTracer);
     function startReplay(msg) {
       const p = mp.state && mpPlayer(msg.playerId); const pts = (msg.path || []).map(q => new THREE.Vector3(q[0], q[1], q[2])); if (!p || pts.length < 2) return;
-      const r = ensureRemote(p); r.golfer.root.visible = true; r.ball.visible = true; r.halo.visible = false; placeRemoteAtBall(r, pts[0], true); r.ball.position.copy(pts[0]);
+      const r = ensureRemote(p); r.golfer.root.visible = true; r.ball.visible = true; r.halo.visible = false; setRemoteClub(r, remoteClubFor(msg.club) || remoteClubFor(suggestClub(pts[0])) || 'iron7'); placeRemoteAtBall(r, pts[0], true); r.ball.position.copy(pts[0]);
       const first = pts.find(q => q.distanceTo(pts[0]) > 1) || pts[1]; cameraState.flightDirection.set(first.x - pts[0].x, 0, first.z - pts[0].z).normalize();
-      replayTracer.material.color.set(p.color); mp.replay = { active: true, playerId: p.id, pts, t: 0, ball: r.ball, remote: r, velocity: new THREE.Vector3(), trail: [], swing: 0, hold: 0, holed: msg.holed, contact: false, landed: false };
+      replayTracer.material.color.set(p.color); mp.replay = { active: true, club: msg.club, playerId: p.id, pts, t: 0, ball: r.ball, remote: r, velocity: new THREE.Vector3(), trail: [], swing: 0, hold: 0, holed: msg.holed, contact: false, landed: false };
       updateStatus(`${p.name} is hitting…`); if (mp.state) updateTurnBanner(mp.state);
     }
     function updateReplay(dt) {
       const R = mp.replay; if (!R) return;
       if (R.swing < .95) { R.swing += dt; const t = R.swing; const angle = t < .45 ? -1.6 * Math.sin(t / .45 * Math.PI / 2) : t < .62 ? -1.6 * (1 - ((t - .45) / .17) ** 2) : 1.1 * Math.min(1, (t - .62) / .3); poseRemote(R.remote.golfer, angle, true);
-        if (!R.contact && t >= .62) { R.contact = true; audioEngine.clubHit(true); } if (t < .62) return; }
+        if (!R.contact && t >= .62) { R.contact = true; audioEngine.clubHit(R.club === 'Putter' ? 'putt' : 'great'); } if (t < .62) return; }
       if (R.active) {
         R.t += dt; const f = R.t * 30; const i = Math.floor(f);
         if (i >= R.pts.length - 1) { R.ball.position.copy(R.pts[R.pts.length - 1]); R.velocity.set(0, 0, 0); R.hold += dt; if (R.holed) R.ball.visible = false;
           if (R.hold > 1.6) { R.active = false; replayTracer.visible = false; const p = mpPlayer(R.playerId); if (p) updateStatus(R.holed ? `${p.name} holed out!` : `${p.name}'s ball stopped`); if (mp.state) { updateRemotes(mp.state); updateTurnBanner(mp.state); } if (mp.pendingCard && mp.state) { mp.pendingCard = false; showMpScorecard(mp.state); } } }
         else { const a = R.pts[i], b = R.pts[i + 1]; R.ball.position.lerpVectors(a, b, f - i); R.velocity.subVectors(b, a).multiplyScalar(30);
           const ground = terrainHeightAt(R.ball.position.x, R.ball.position.z); if (R.ball.position.y - ground > .3) { if (!R.trail.length || R.trail[R.trail.length - 1].distanceTo(R.ball.position) > .4) R.trail.push(R.ball.position.clone()); } else if (!R.landed && R.trail.length > 5) { R.landed = true; audioEngine.landing(surfaceInfoAt(R.ball.position.x, R.ball.position.z).surface); } }
-        if (R.trail.length > 2) { const len = ribbonGeometry(R.trail.concat([R.ball.position.clone()]), .22, replayTracer.geometry); replayTracerTexture.repeat.set(1 / Math.max(.001, len), 1); replayTracer.visible = true; replayTracer.material.opacity = R.hold > 0 ? Math.max(0, 1 - R.hold / 1.6) : 1; }
+        if (R.trail.length > 2) { const len = ribbonGeometry(R.trail.concat([R.ball.position.clone()]), .3, replayTracer.geometry, .7); replayTracerTexture.repeat.set(1 / Math.max(.001, len), 1); replayTracer.visible = true; replayTracer.material.opacity = R.hold > 0 ? Math.max(0, 1 - R.hold / 1.6) : 1; }
       }
     }
     function mpTick(dt) {
@@ -1763,7 +1827,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       if (ballState.inFlight) { mp.pathClock += dt; if (mp.pathClock >= 1 / 30 && mp.path.length < 900) { mp.pathClock = 0; const q = ballState.position; mp.path.push([+q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2)]); } }
       const settled = !ballState.inFlight && !hazardSeq && !(cupDrop && !cupDrop.done) && !swingAnimation.active;
       if (!settled) return; mp.shotPending = false; const q = ballState.position; mp.path.push([+q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2)]);
-      mpPost('shot', mpAuth({ result: { x: q.x, y: q.y, z: q.z, surface: ballState.surface, strokes: holeTotal(), holed: ballState.holed, done: holeState.completed, path: mp.path } })).catch(e => updateStatus(e.message));
+      mpPost('shot', mpAuth({ result: { x: q.x, y: q.y, z: q.z, surface: ballState.surface, strokes: holeTotal(), holed: ballState.holed, done: holeState.completed, club: mp.shotClub || currentClubName, path: mp.path } })).catch(e => updateStatus(e.message));
       if (holeState.completed) updateStatus(ballState.holed ? `In the hole in ${holeTotal()}! Waiting for the others to finish` : 'Hole finished · waiting for the others');
     }
 
@@ -1815,7 +1879,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         const treeMat = new THREE.MeshLambertMaterial({ color: 0x3f9d49 }); const treeMat2 = new THREE.MeshLambertMaterial({ color: 0x2e8040 });
         for (let i = 0; i < 16; i += 1) { const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), i % 2 ? treeMat : treeMat2); const s = .9 + random01(i * 7 + index) * .8; blob.scale.set(s, s * 1.1, s); blob.position.set(-7 + i * .95 + random01(i * 3) * .4, .9 + random01(i * 5) * .7, 6.5 + random01(i * 11) * 1.5); sc.add(blob); }
         const g = buildGolfer(type); g.shadow.visible = false; g.root.rotation.y = type === 'girl' ? .32 : -.32; sc.add(g.root);
-        const club = GolfClubs.createClub('driver', { headScale: 2.2, length: .96, flatSole: true });
+        const club = GolfClubs.createClub('driver', { headScale: 2.2, length: .96, flatSole: true, edition: clubEdition(type) });
         club.updateMatrixWorld(true); club.userData.soleFix = -CONFIG.clubModel.lengthToGround - new THREE.Box3().setFromObject(club.userData.head).min.y;
         const cam = new THREE.PerspectiveCamera(28, 400 / 360, .1, 30); cam.position.set(0, 1.02, -5); cam.lookAt(0, .98, 0);
         const p = { r, sc, cam, g, card, club, mode: null, lean: .42, armOut: .16, swingT: -1, nextSwing: 1.2 + index * .6 };
@@ -1842,6 +1906,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function queueTip(id, text) {
       if (tutorial.active || touchMode) return;
+      if (id === 'swing' || id === 'aim' || id === 'walk') return; // the key line at the bottom already says this; no pop-up on top of it
+      if (id === 'putt') text = 'On the green, let go at the dashed line on the power bar. The dots flow downhill, so aim a little uphill.';
       if (onboarding.seen.has(id) || onboarding.queue.some(tip => tip.id === id) || onboarding.active?.id === id) return;
       onboarding.queue.push({ id, text }); if (!onboarding.active) showNextTip();
     }
@@ -1880,7 +1946,9 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function resetSwingMeter() { swing.phase = 'ready'; swing.value = 0; swing.direction = 1; swing.power = 0; swing.accuracy = 0; swing.holdActive = false; updateSwingMeterUI(); }
     function beginSwingHold() { if (hazardSeq) return; if (!mpMyTurn()) { updateStatus(mpWaitText()); return; } if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active || ballState.holed || holeState.completed) return; audioEngine.ensure(); if (swing.phase === 'accuracy') { completeAccuracyClick(); return; } if (swing.phase !== 'ready') return; swing.phase = 'power'; swing.value = 0; swing.direction = 1; swing.holdActive = true; queueTip('swing', 'Hold the mouse or Space for power. Release, then click the gold accuracy zone.'); updateStatus(currentClub().putter ? 'Hold to pull the putter back' : 'Hold to swing back — release to set power'); updateSwingMeterUI(); }
     function releaseSwingHold() { if (!swing.holdActive || swing.phase !== 'power') return; swing.holdActive = false; swing.power = THREE.MathUtils.clamp(swing.value, 0, CONFIG.swing.powerMax); swing.phase = 'accuracy'; swing.value = 1; swing.direction = -1; updateStatus('Accuracy marker bouncing — strike when it’s in the gold zone'); updateSwingMeterUI(); }
-    function completeAccuracyClick() { if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active || swing.phase !== 'accuracy') return; swing.accuracy = THREE.MathUtils.clamp(swing.value, 0, 1); const shotQuality = shotResultForAccuracy(currentClub(), swing.accuracy); swing.phase = 'swinging'; swing.value = 0; swingAnimation = { active: true, time: 0, power: swing.power, sidespinRpm: shotQuality.sidespinRpm, contactTriggered: false, shotQuality, direction: aimDirection() }; updateStatus(`${shotQuality.label} — downswing to contact`); updateSwingMeterUI(); updateAddressPrompt(); }
+    function completeAccuracyClick() { if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active || swing.phase !== 'accuracy') return; swing.accuracy = THREE.MathUtils.clamp(swing.value, 0, 1); const shotQuality = shotResultForAccuracy(currentClub(), swing.accuracy); swing.phase = 'swinging'; swing.value = 0; swingAnimation = { active: true, time: 0, power: swing.power, sidespinRpm: shotQuality.sidespinRpm, contactTriggered: false, shotQuality, direction: aimDirection() }; updateStatus(`${shotQuality.label} — downswing to contact`); updateSwingMeterUI(); updateAddressPrompt(); swingHitFlash(TIER[shotQuality.type] || 'ok'); }
+    // the meter itself reacts to the strike: gold glow for pure, green for great, a shake for a miss
+    function swingHitFlash(tier) { const h = $('swing-hud'); h.classList.remove('hit-pure', 'hit-great', 'hit-miss', 'hit-bad', 'hit-ok'); void h.offsetWidth; h.classList.add('hit-' + tier); clearTimeout(swingHitFlash.t); swingHitFlash.t = setTimeout(() => h.classList.remove('hit-' + tier), 1100); }
     // Where to let go of the power bar to reach the flag (ignores wind and slope, so it's a guide)
     function flagPowerRatio() {
       if (!addressing || !currentHole) return null; const club = currentClub(); const lie = surfaceInfoAt(ballState.position.x, ballState.position.z).surface;
@@ -1906,15 +1974,15 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const powerRatio = THREE.MathUtils.clamp((swing.phase === 'power' ? swing.value : swing.power) / CONFIG.swing.powerMax, 0, 1); const accuracyRatio = swing.phase === 'accuracy' ? swing.value : swing.accuracy;
       $('power-fill').style.height = `${powerRatio * 100}%`; $('power-marker').style.bottom = `${powerRatio * 100}%`; $('accuracy-marker').style.top = `${(1 - THREE.MathUtils.clamp(accuracyRatio, 0, 1)) * 100}%`;
       const width = swingSweetWidth(); $('accuracy-sweet-zone').style.top = `${(1 - CONFIG.swing.sweetSpotCenter - width / 2) * 100}%`; $('accuracy-sweet-zone').style.height = `${width * 100}%`;
-      $('power-value').textContent = swing.phase === 'power' || swing.power ? `${Math.round(powerRatio * 100)}%` : '0%'; $('accuracy-value').textContent = swing.phase === 'accuracy' || swing.accuracy ? `${Math.round(accuracyRatio * 100)}%` : '—'; $('swing-phase').textContent = swing.phase === 'ready' ? 'Ready' : swing.phase === 'power' ? 'Power' : swing.phase === 'accuracy' ? 'Accuracy' : 'Contact'; $('swing-instruction').textContent = swing.phase === 'ready' ? 'Hold mouse or Space to swing back' : swing.phase === 'power' ? 'Release to set power' : swing.phase === 'accuracy' ? 'Click when the marker is in the gold zone' : 'Club is moving to the ball';
+      $('power-value').textContent = swing.phase === 'power' || swing.power ? `${Math.round(powerRatio * 100)}%` : '0%'; $('accuracy-value').textContent = swing.phase === 'accuracy' || swing.accuracy ? `${Math.round(accuracyRatio * 100)}%` : '—'; $('swing-phase').textContent = swing.phase === 'ready' ? 'Ready' : swing.phase === 'power' ? 'Power' : swing.phase === 'accuracy' ? 'Accuracy' : 'Contact'; $('swing-instruction').textContent = swing.phase === 'ready' ? (touchMode ? 'Hold SWING to swing back' : '') : swing.phase === 'power' ? 'Release to set power' : swing.phase === 'accuracy' ? 'Click when the marker is in the gold zone' : 'Club is moving to the ball';
     }
     function updateClubButtons() { document.querySelectorAll('.club-button').forEach(button => { button.classList.toggle('selected', button.dataset.club === currentClubName); button.classList.toggle('suggested', button.dataset.club === suggestedClubName); button.classList.toggle('locked', CONFIG.hazards.sandOnlyWedge && !CONFIG.clubs[button.dataset.club].sandWedge && ballInSand()); }); }
     function buildClubButtons() { const wrap = $('club-buttons'); Object.entries(CONFIG.clubs).forEach(([name, club]) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'club-button'; button.dataset.club = name; button.innerHTML = `<kbd>${club.key}</kbd><strong>${name}</strong><span>${Math.round(metersToYards(club.maxDistanceMeters))} yd</span>`; wrap.appendChild(button); }); updateClubButtons(); }
     // Coach pick: the club that fits this shot best, from the distance to the flag and the lie
     let suggestedClubName = null;
-    function suggestClub() {
-      const cfg = CONFIG.clubSuggestion; const lie = surfaceInfoAt(ballState.position.x, ballState.position.z).surface;
-      const distance = Math.hypot(ballState.position.x - currentHole.pin.x, ballState.position.z - currentHole.pin.z);
+    function suggestClub(at = ballState.position) {
+      const cfg = CONFIG.clubSuggestion; const lie = surfaceInfoAt(at.x, at.z).surface;
+      const distance = Math.hypot(at.x - currentHole.pin.x, at.z - currentHole.pin.z);
       const entries = Object.entries(CONFIG.clubs); const putter = entries.find(([, c]) => c.putter)[0];
       if (lie === 'green' || (lie === 'fringe' && distance <= cfg.fringePuttMeters)) return putter;
       if (lie === 'sand') return entries.find(([, c]) => c.sandWedge)[0];
@@ -1952,7 +2020,18 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function enterAddressMode() { if (hazardSeq) return; if (!mpMyTurn()) { updateStatus(mpWaitText()); return; } if (gameFlow.mode !== 'playing' || ballState.inFlight || swingAnimation.active || ballState.holed || holeState.completed) return; if (ballDistanceToGolfer() > CONFIG.character.addressDistance) { updateStatus('Walk closer to the ball first'); return; } addressing = true; movement.moving = false; movement.velocity.set(0, 0, 0); if (CONFIG.aim.autoAimAtPin) aimAtPin(); approachBallPosition(); resetSwingMeter(); queueTip('aim', 'You start aimed at the flag. Hold A/D or move the mouse to adjust. The circle shows the expected landing area.'); updateStatus('Aimed at the flag — adjust if you like, then hold to swing'); applySuggestedClub(); if (CONFIG.hazards.sandOnlyWedge && ballInSand() && !currentClub().sandWedge) { currentClubName = sandWedgeName(); updateClubVisual(); resetSwingMeter(); updateClubButtons(); } if (ballInSand()) updateStatus(`Bunker! Splash it out with the ${sandWedgeName()} · swing a little harder than the distance`); updateAddressPrompt(); }
     function leaveAddressMode() { if (!addressing || swingAnimation.active) return; addressing = false; resetSwingMeter(); updateStatus('Walking mode — move to the ball and press E near it'); updateAddressPrompt(); }
     function teleportGolferToBall() { if (!CONFIG.debug.enabled || !CONFIG.character.allowTeleport || ballState.inFlight || swingAnimation.active || ballState.holed || holeState.completed) return; approachBallPosition(); addressing = false; resetSwingMeter(); updateStatus('Teleported near the ball — press E to address'); updateAddressPrompt(); }
-    function updateAddressPrompt() { if (gameFlow.mode === 'flyover') { $('hint').textContent = 'Hole flyover · press any key to skip'; return; } if (gameFlow.mode === 'intro') { $('hint').textContent = 'Get ready · press any key to start'; return; } if (gameComplete) { $('hint').textContent = 'Round complete · press Play again on the scorecard'; return; } if (holeState.completed) { $('hint').textContent = 'Scorecard open · choose the next hole'; return; } if (swingAnimation.active) { $('hint').textContent = 'Swing in progress — watch the club reach the ball'; return; } if (addressing) { $('hint').textContent = swing.phase === 'accuracy' ? 'Click or press Space when the marker reaches the gold zone' : swing.phase === 'power' ? 'Release mouse or Space to set power' : 'Aimed at the flag · hold A/D or move the mouse to adjust · hold mouse or Space to swing'; return; } const nearby = !ballState.inFlight && ballDistanceToGolfer() <= CONFIG.character.addressDistance; $('hint').textContent = nearby ? 'Press E to hit the ball' : 'WASD to walk · Shift to jog · arrows or right-drag to look around · F to go to your ball'; }
+    // one short "what now" line at the bottom, with real key caps and a mouse drawing instead of long sentences
+    function setHint(html) { const el = $('hint'); if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html; } }
+    function updateAddressPrompt() {
+      if (gameFlow.mode === 'flyover') return setHint(''); // the flyover has its own skip note
+      if (gameFlow.mode === 'intro') return setHint('Any key to start');
+      if (gameComplete) return setHint('Round complete');
+      if (holeState.completed) return setHint(`${K('Enter')} next hole`);
+      if (swingAnimation.active) return setHint('Swinging…');
+      if (addressing) return setHint(swing.phase === 'ready' ? `${K('A', 'D')} aim · hold ${K('Space')} or ${M('left')} swing · ${K('E')} step away` : ''); // mid-swing the meter itself says what to do
+      const nearby = !ballState.inFlight && ballDistanceToGolfer() <= CONFIG.character.addressDistance;
+      setHint(nearby ? `${K('E')} set up to hit` : `${K('W', 'A', 'S', 'D')} walk · ${K('F')} go to your ball`);
+    }
     function dampAngle(current, target, amount) { const difference = Math.atan2(Math.sin(target - current), Math.cos(target - current)); return current + difference * THREE.MathUtils.clamp(amount, 0, 1); }
     // Walking is relative to the camera: W always goes where the camera looks.
     // Speed ramps up and down smoothly, and the golfer slides along water, stakes and tree trunks.
@@ -2004,6 +2083,13 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function angleToPin() { const pin = currentHole.pin; return Math.atan2(pin.x - ballState.position.x, -(pin.z - ballState.position.z)); }
     function aimAtPin() { aimAngleRadians = angleToPin(); previewClock = 1; }
     // F: quick trip to the ball, already set up and aimed at the flag
+    // computers: once the ball has stopped, a big "press F" reminder shows after 5 seconds, or straight away if a key is pressed that does nothing yet
+    const fNudge = { t: 0, keyed: false };
+    function fNudgeWanted() { return !touchMode && gameFlow.mode === 'playing' && !addressing && !ballState.inFlight && !swingAnimation.active && !ballState.holed && !holeState.completed && !hazardSeq && !(typeof cupDrop !== 'undefined' && cupDrop) && mpMyTurn() && !tutorial.active && !teleportLesson.active && holeTotal() > 0 && ballDistanceToGolfer() > CONFIG.character.addressDistance + 2; }
+    function updateFNudge(dt) {
+      const want = fNudgeWanted(); if (!want) { fNudge.t = 0; fNudge.keyed = false; } else fNudge.t += dt;
+      const show = want && (fNudge.t >= 5 || fNudge.keyed); const el = $('f-nudge'); if (el.hidden === show) el.hidden = !show;
+    }
     function goToBall() {
       if (hazardSeq || gameFlow.mode !== 'playing' || ballState.inFlight || swingAnimation.active || ballState.holed || holeState.completed || addressing) return;
       markTeleportTaught(); const fade = $('go-fade'); fade.classList.add('on');
@@ -2013,7 +2099,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function applyAddressPose(backAmount = 0, dt = 1 / 60) { const club = currentClub(); const maxBack = club.putter ? CONFIG.animation.putterBackswingMax : CONFIG.animation.backswingMax; const target = -maxBack * THREE.MathUtils.clamp(backAmount, 0, 1); const current = golfer.poseAngle === undefined ? target : golfer.poseAngle; applySwingPose(THREE.MathUtils.damp(current, target, CONFIG.animation.poseSmoothing, dt)); }
     // angle < 0 = backswing, 0 = at the ball, > 0 = follow-through. Arms and club swing together from the shoulders.
     function applySwingPose(angle) {
-      holdClub('swing'); const club = currentClub(); golfer.poseAngle = angle; const held = clubModels[club.model]; if (held && held.parent === golfer.clubRoot) held.position.y = (golfer.clubSoleOffset || 0) + (held.userData.soleFix || 0);
+      holdClub('swing'); const club = currentClub(); golfer.poseAngle = angle; const held = clubModels[clubKey(club.model)]; if (held && held.parent === golfer.clubRoot) held.position.y = (golfer.clubSoleOffset || 0) + (held.userData.soleFix || 0);
       pointArmAtHands(golfer.leftArm); pointArmAtHands(golfer.rightArm);
       golfer.armsRig.rotation.set(0, -angle * (club.putter ? .04 : .18), -angle * (club.putter ? .9 : .78));
       golfer.clubRoot.rotation.set(0, 0, -angle * (club.putter ? .1 : .3));
@@ -2078,7 +2164,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function updateFlag(now) {
       const flag = courseRuntime.flagMesh; const base = courseRuntime.flagBasePositions; if (!flag || !base) return;
       const attribute = flag.geometry.attributes.position; const strength = THREE.MathUtils.clamp(wind.mph / Math.max(1, CONFIG.wind.maxMph), 0, 1);
-      for (let i = 0; i < attribute.count; i += 1) { const x = base[i * 3]; attribute.array[i * 3 + 2] = base[i * 3 + 2] + Math.sin(now * .0045 + x * 8) * (.018 + strength * .075) * THREE.MathUtils.clamp(x + .46, 0, 1); }
+      for (let i = 0; i < attribute.count; i += 1) { const x = base[i * 3]; attribute.array[i * 3 + 2] = base[i * 3 + 2] + Math.sin(now * .0045 + x * 8) * (.018 + strength * .075) * THREE.MathUtils.clamp(x + (courseRuntime.flagHalfW || .47), 0, 1.2); }
       attribute.needsUpdate = true;
       if (courseRuntime.flagRoot) { courseRuntime.flagRoot.rotation.z = -Math.sin(wind.angle) * strength * .075; courseRuntime.flagRoot.rotation.x = Math.cos(wind.angle) * strength * .055; }
     }
@@ -2202,7 +2288,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       $('golf-card-wrap').innerHTML = golfCardHtml([me], pars, currentHoleIndex); $('card-leave').hidden = true; $('card-wait').textContent = ''; $('next-hole').hidden = false;
       const t = playerTotals(me.scores, pars); const final = currentHoleIndex === COURSE_DATA.holes.length - 1 && scorecard.every(row => row.score !== null); gameComplete = final;
       $('scorecard-hole-tag').textContent = final ? 'Final' : `Hole ${currentHole.number}`;
-      $('scorecard-title').textContent = final ? 'Final scorecard' : `Hole ${currentHole.number} complete`; $('scorecard-subtitle').textContent = final ? `Round complete · ${t.total} strokes · ${t.toPar === 0 ? 'Even par' : formatToPar(t.toPar)}` : `${holeCheer(scorecard[currentHoleIndex].score, currentHole.par).main} · ${formatToPar(t.toPar)} for the round`; $('next-hole').textContent = final ? 'Play again' : `Next hole · ${currentHoleIndex + 2}`;
+      $('scorecard-title').textContent = final ? 'Final card' : `Hole ${currentHole.number} complete`; $('scorecard-subtitle').textContent = final ? `${t.total} strokes · ${t.toPar === 0 ? 'even par' : formatToPar(t.toPar)} for ${COURSE_DATA.holes.length}` : `${holeCheer(scorecard[currentHoleIndex].score, currentHole.par).main} · ${formatToPar(t.toPar)} for the round`; $('next-hole').textContent = final ? 'Play again' : `Next hole · ${currentHoleIndex + 2}`;
       showCardRank('', false); if (final && !mp.active) postFinishedRound(scorecard.map(r => r.score), 'solo');
       showScorecard(); applyCardMode(final);
     }
@@ -2213,7 +2299,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     function resetBallState() {
       if (typeof shotFeel !== 'undefined') { shotFeel.shot = null; shotFeel.slowLeft = 0; shotFeel.timeScale = 1; }
-      cameraState.watchBall = false; tracerState.points.length = 0; tracerState.linger = 0; if (typeof tracer !== 'undefined') tracer.visible = false;
+      cameraState.watchBall = false; tracerState.points.length = 0; tracerState.linger = 0; if (typeof tracer !== 'undefined') { tracer.visible = false; tracerGlow.visible = false; tracerHead.visible = false; tracerGround.visible = false; }
       cupDrop = null; hazardSeq = null; ball.visible = true; if (typeof ballShadow !== 'undefined') ballShadow.visible = true;
       const teeHeight = surfaceInfoAt(0, CONFIG.world.teeZ).height; ballState.position.set(0, teeHeight + ballRadius, CONFIG.world.teeZ); ballState.origin.copy(ballState.position); ballState.velocity.set(0, 0, 0); ballState.inFlight = false; ballState.onGround = false; ballState.isPutting = false; ballState.holed = false; ballState.surface = 'tee'; ballState.bounces = 0; ballState.carryDistance = 0; ballState.firstLandingRecorded = false; ballState.shotMessage = '—'; ballState.cupCooldown = 0; ballState.treeHit = false; spin.backspinRpm = 0; spin.sidespinRpm = 0; aimAngleRadians = 0; previewClock = 1; addressing = false; swingAnimation.active = false; cameraState.ballHold = 0; movement.moving = false; holeState = { strokes: 0, penalties: 0, completed: false }; ball.position.copy(ballState.position); approachBallPosition(); cameraState.yaw = -aimAngleRadians; movement.velocity.set(0, 0, 0); applyWalkingPose(); resetSwingMeter(); updateStatus(`Hole ${currentHole.number} · today's pin is ${currentHole.pinLabel === 'middle' ? 'in the middle' : currentHole.pinLabel} · walk to the ball and press E`); updateAddressPrompt(); updateHud();
     }
@@ -2239,20 +2325,23 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         gameFlow.flyoverTime += dt; const t = THREE.MathUtils.clamp(gameFlow.flyoverTime / CONFIG.presentation.flyoverDuration, 0, 1); const eased = t * t * (3 - 2 * t); const desired = gameFlow.flyoverCurve.getPoint(eased); constrainCameraPosition(desired); camera.position.copy(desired); camera.lookAt(gameFlow.flyoverLookCurve.getPoint(eased)); if (t >= 1) finishFlyover();
       } else if (gameFlow.mode === 'intro') { gameFlow.introTime += dt; if (gameFlow.introTime >= CONFIG.presentation.introDuration) beginHolePlay(); }
     }
+    // every texture on the course gets full anisotropic filtering, so stripes, sand and signs stay crisp at low camera angles
+    const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
+    function sharpenTextures(root) { root.traverse(o => { const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; mats.forEach(m => { ['map', 'alphaMap', 'bumpMap'].forEach(k => { const t = m[k]; if (t && t.isTexture && t.anisotropy < maxAniso) { t.anisotropy = maxAniso; t.needsUpdate = true; } }); }); }); }
     function loadHole(index, present = true) {
-      currentHoleIndex = THREE.MathUtils.clamp(index, 0, COURSE_DATA.holes.length - 1); currentHole = normalizeHole(COURSE_DATA.holes[currentHoleIndex]); gameComplete = false; $('scorecard-overlay').hidden = true; buildCourse(currentHole); scene.fog.far = Math.max(CONFIG.camera.fogFar, currentHole.lengthMeters * 1.3); resetBallState(); rerollWind(true); updateHud(); updateMinimap(); if (present) startHolePresentation();
+      currentHoleIndex = THREE.MathUtils.clamp(index, 0, COURSE_DATA.holes.length - 1); currentHole = normalizeHole(COURSE_DATA.holes[currentHoleIndex]); gameComplete = false; $('scorecard-overlay').hidden = true; buildCourse(currentHole); sharpenTextures(scene); scene.fog.far = Math.max(CONFIG.camera.fogFar, currentHole.lengthMeters * 1.3); resetBallState(); rerollWind(true); updateHud(); updateMinimap(); if (present) startHolePresentation();
     }
 
     function launchBall(power, sidespinRpm, shotQuality, launchDirection) {
       if (gameFlow.mode !== 'playing' || ballState.inFlight || ballState.holed || holeState.completed) return;
       tracerState.points.length = 0; tracerState.linger = 0; tracerState.accumulator = 0; cameraState.watchBall = true;
-      if (mp.active) { mp.shotPending = true; mp.pathClock = 0; mp.path = [[+ballState.position.x.toFixed(2), +ballState.position.y.toFixed(2), +ballState.position.z.toFixed(2)]]; }
+      if (mp.active) { mp.shotPending = true; mp.shotClub = currentClubName; mp.pathClock = 0; mp.path = [[+ballState.position.x.toFixed(2), +ballState.position.y.toFixed(2), +ballState.position.z.toFixed(2)]]; }
       const club = currentClub(); const quality = shotQuality || shotResultForAccuracy(club, CONFIG.swing.sweetSpotCenter); const lieInfo = surfaceInfoAt(ballState.position.x, ballState.position.z); const lie = lieInfo.surface; addressing = false;
       const effectivePower = THREE.MathUtils.clamp(power * quality.powerMultiplier, 0, CONFIG.swing.powerMax); const angle = THREE.MathUtils.degToRad(effectiveLoft(club) * quality.launchAngleMultiplier); let speed = effectiveLaunchSpeed(club, effectivePower); speed *= distanceMultiplierForLie(club, lie);
       const direction = (launchDirection || aimDirection()).clone(); direction.y = 0; direction.normalize(); const groundRoll = Boolean(club.putter || quality.groundRoll);
       if (groundRoll && !club.putter) { const decel = (CONFIG.physics.surfaces[lie] || CONFIG.physics.surfaces.fairway).rollDecel; speed = Math.sqrt(2 * decel * club.maxDistanceMeters * CONFIG.physics.toppedRollShare * effectivePower) / Math.max(.2, Math.cos(angle)); }
       ballState.rollCap = club.putter ? Infinity : Math.sqrt(2 * CONFIG.physics.surfaces.fairway.rollDecel * club.maxRollMeters * Math.max(.25, effectivePower));
-      ballState.position.y = lieInfo.height + ballRadius; ballState.velocity.set(direction.x * speed * Math.cos(angle), groundRoll ? 0 : speed * Math.sin(angle), direction.z * speed * Math.cos(angle)); spin.backspinRpm = groundRoll ? 0 : backspinForClub(club, effectivePower); spin.sidespinRpm = groundRoll ? 0 : sidespinRpm; ballState.inFlight = true; ballState.onGround = groundRoll; ballState.isPutting = club.putter; ballState.origin.copy(ballState.position); ballState.surface = lie; ballState.bounces = 0; ballState.carryDistance = 0; ballState.firstLandingRecorded = false; ballState.shotMessage = quality.label; ballState.cupCooldown = 0; ballState.treeHit = false; holeState.strokes += 1; updateShotCount(); cameraState.flightDirection.copy(direction); cameraState.ballHold = 0; effects.trailPositions.length = 0; effects.trailAccumulator = 0; audioEngine.clubHit(quality.type === 'perfect'); updateStatus(`${quality.label} — ${lie === 'sand' ? 'from the bunker' : club.putter ? 'putt rolling' : currentClubName}`); updateAddressPrompt();
+      ballState.position.y = lieInfo.height + ballRadius; ballState.velocity.set(direction.x * speed * Math.cos(angle), groundRoll ? 0 : speed * Math.sin(angle), direction.z * speed * Math.cos(angle)); spin.backspinRpm = groundRoll ? 0 : backspinForClub(club, effectivePower); spin.sidespinRpm = groundRoll ? 0 : sidespinRpm; ballState.inFlight = true; ballState.onGround = groundRoll; ballState.isPutting = club.putter; ballState.origin.copy(ballState.position); ballState.surface = lie; ballState.bounces = 0; ballState.carryDistance = 0; ballState.firstLandingRecorded = false; ballState.shotMessage = quality.label; ballState.cupCooldown = 0; ballState.treeHit = false; holeState.strokes += 1; updateShotCount(); cameraState.flightDirection.copy(direction); cameraState.ballHold = 0; effects.trailPositions.length = 0; effects.trailAccumulator = 0; audioEngine.clubHit(club.putter ? 'putt' : (TIER[quality.type] || 'great')); updateStatus(`${quality.label} — ${lie === 'sand' ? 'from the bunker' : club.putter ? 'putt rolling' : currentClubName}`); updateAddressPrompt();
     }
 
     function stepPhysics(state, spinState, dt, preview = false) {
@@ -2311,10 +2400,13 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       }
     }
 
+    // the preview line and landing target use the power that reaches the flag (the dashed FLAG line on the power bar),
+    // not the club's maximum; if the flag is out of reach they show a full swing
+    function previewPower() { const r = flagPowerRatio(); return r === null ? 1 : THREE.MathUtils.clamp(r * CONFIG.swing.powerMax, .05, 1); }
     function makePreviewState() {
-      const club = currentClub(); const angle = THREE.MathUtils.degToRad(effectiveLoft(club)); const ground = surfaceInfoAt(ballState.position.x, ballState.position.z); const speed = effectiveLaunchSpeed(club, 1) * distanceMultiplierForLie(club, ground.surface); const direction = aimDirection(); const state = { position: new THREE.Vector3(ballState.position.x, ground.height + ballRadius, ballState.position.z), origin: ballState.position.clone(), velocity: new THREE.Vector3(direction.x * speed * Math.cos(angle), club.putter ? 0 : speed * Math.sin(angle), direction.z * speed * Math.cos(angle)), inFlight: true, onGround: Boolean(club.putter), isPutting: Boolean(club.putter), holed: false, surface: ground.surface, bounces: 0, carryDistance: 0, firstLandingRecorded: false, cupCooldown: 0, treeHit: false };
+      const club = currentClub(); const pw = previewPower(); const angle = THREE.MathUtils.degToRad(effectiveLoft(club)); const ground = surfaceInfoAt(ballState.position.x, ballState.position.z); const speed = effectiveLaunchSpeed(club, pw) * distanceMultiplierForLie(club, ground.surface); const direction = aimDirection(); const state = { position: new THREE.Vector3(ballState.position.x, ground.height + ballRadius, ballState.position.z), origin: ballState.position.clone(), velocity: new THREE.Vector3(direction.x * speed * Math.cos(angle), club.putter ? 0 : speed * Math.sin(angle), direction.z * speed * Math.cos(angle)), inFlight: true, onGround: Boolean(club.putter), isPutting: Boolean(club.putter), holed: false, surface: ground.surface, bounces: 0, carryDistance: 0, firstLandingRecorded: false, cupCooldown: 0, treeHit: false };
       state.rollCap = club.putter ? Infinity : Math.sqrt(2 * CONFIG.physics.surfaces.fairway.rollDecel * club.maxRollMeters);
-      const previewSpin = { backspinRpm: club.putter ? 0 : backspinForClub(club, 1), sidespinRpm: 0 }; return { state, previewSpin };
+      const previewSpin = { backspinRpm: club.putter ? 0 : backspinForClub(club, pw), sidespinRpm: 0 }; return { state, previewSpin };
     }
     // ---------- where am I hitting? a flag marker over the pin, and a landing tag that never covers it ----------
     function updatePinMarker() {
@@ -2353,9 +2445,17 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         tracerState.linger += dt; tracer.material.opacity = Math.max(0, 1 - tracerState.linger / CONFIG.tracer.lingerSeconds);
         if (tracerState.linger >= CONFIG.tracer.lingerSeconds) { tracerState.points.length = 0; tracerState.linger = 0; }
       }
-      if (tracerState.points.length < 3) { tracer.visible = false; return; }
-      const pts = tracerState.points.slice(); if (flying) pts.push(ballState.position.clone());
-      const length = ribbonGeometry(pts, tracer.userData.width || CONFIG.tracer.width, tracer.geometry); tracerTexture.repeat.set(1 / Math.max(.001, length), 1); tracerTexture.offset.x = 0; tracer.visible = true;
+      tracerGlow.material.opacity = tracer.material.opacity * .16; tracerGround.material.opacity = tracer.material.opacity * .26;
+      tracerHead.visible = flying && tracerState.points.length > 1; if (tracerHead.visible) { tracerHead.position.copy(ballState.position); tracerHead.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(ballState.position) * .011, .25, 1.5)); }
+      if (tracerState.points.length < 3) { tracer.visible = tracerGlow.visible = tracerGround.visible = false; return; }
+      const pts = tracerState.points; if (flying) { const tip = tracerState.tip || (tracerState.tip = new THREE.Vector3()); tip.copy(ballState.position); tip._air = true; tip._gy = undefined; pts.push(tip); }
+      const core = tracer.userData.width || CONFIG.tracer.width;
+      const length = ribbonGeometry(pts, core, tracer.geometry, .7); ribbonGeometry(pts, core * 2.2, tracerGlow.geometry, .7);
+      // the ball's path traced on the grass underneath, so draws, fades and slices read at a glance
+      for (let i = 0; i < pts.length; i += 1) { const q = pts[i]; if (q._gy === undefined) q._gy = surfaceInfoAt(q.x, q.z).height; const g = tracerGroundPts[i] || (tracerGroundPts[i] = new THREE.Vector3()); g.set(q.x, q._gy + .06, q.z); g._air = false; }
+      tracerGroundPts.length = pts.length; ribbonGeometry(tracerGroundPts, core * 1.1, tracerGround.geometry, .5);
+      if (flying) pts.pop();
+      tracerTexture.repeat.set(1 / Math.max(.001, length), 1); tracerTexture.offset.x = 0; tracer.visible = tracerGlow.visible = tracerGround.visible = true;
     }
     const shotFeel = { timeScale: 1, slowLeft: 0, slowTotal: .55, punch: 0, shot: null };
     const TIER = { perfect: 'pure', nice: 'great', hook: 'miss', slice: 'miss', topped: 'bad', fat: 'bad' };
@@ -2373,8 +2473,10 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function onShotContact(quality) {
       const club = currentClub(); const tier = TIER[quality.type] || 'ok'; const pin = currentHole.pin;
       shotFeel.shot = { club: currentClubName, putter: !!club.putter, start: ballState.position.clone(), startToPin: Math.hypot(ballState.position.x - pin.x, ballState.position.z - pin.z), strokesBefore: holeTotal(), tier, judged: false };
-      showShotPop(quality.label, '', tier);
-      tracer.material.color.set(tier === 'pure' ? 0xffc83d : CONFIG.tracer.color); tracer.userData.width = tier === 'pure' ? CONFIG.tracer.width * 1.6 : CONFIG.tracer.width;
+      const SUB = { hook: 'curving left', slice: 'curving right', topped: 'thin · low runner', fat: 'heavy · came up short', perfect: club.putter ? '' : 'right off the sweet spot', nice: '' };
+      showShotPop(quality.label, SUB[quality.type] || '', tier);
+      const tc = { pure: 0xffc233, great: 0xffffff, miss: 0xff9d45, bad: 0xff6b5b }[tier] || 0xffffff; tracer.material.color.set(tc); tracerGlow.material.color.set(tc); tracerHead.material.color.set(tc); tracer.userData.width = tier === 'pure' ? CONFIG.tracer.width * 1.2 : CONFIG.tracer.width;
+      if (tier === 'great' && !club.putter) shotFeel.punch = .45;
       if (tier === 'pure' && !club.putter) { shotFeel.slowLeft = shotFeel.slowTotal = .55; shotFeel.punch = 1; audioEngine.tone(1568, .35, .07, 'sine', .05); audioEngine.tone(2093, .45, .05, 'sine', .14); }
     }
     function judgeShot() {
@@ -2582,10 +2684,12 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function updateHud() {
       if (!currentHole) return; const pinDistance = Math.hypot(ballState.position.x - currentHole.pin.x, ballState.position.z - currentHole.pin.z); const roundScore = currentRoundScore(); const roundPar = currentRoundPar(); const lie = surfaceInfoAt(ballState.position.x, ballState.position.z).surface; const club = currentClub(); const lieLabels = { tee: 'Tee', fairway: 'Fairway', rough: 'Rough', sand: 'Bunker', fringe: 'Fringe', green: 'Green', water: 'Water', outOfBounds: 'Out of bounds' };
       $('hole-num').textContent = String(currentHole.number); $('hole-name').textContent = currentHole.name; $('hole-meta').textContent = `Par ${currentHole.par} · ${currentHole.lengthYards}`; drawYardageSketch(); markBallOnSketch(); const rise = (lie === 'green' || lie === 'fringe') ? greenHeightAt(currentHole.pin.x, currentHole.pin.z) - greenHeightAt(ballState.position.x, ballState.position.z) : 0; $('pin-spot').textContent = currentHole.pinLabel; $('pin-distance').textContent = (lie === 'green' || lie === 'fringe') ? `${Math.round(pinDistance * 3.281)} ft${rise > .06 ? ' uphill' : rise < -.06 ? ' downhill' : ''}` : `${Math.round(metersToYards(pinDistance))} to pin`; $('lie').textContent = (lieLabels[lie] || lie).toLowerCase(); updateMobileBar(Math.round(metersToYards(pinDistance)), lie); $('stroke-count').textContent = String(holeTotal()); $('course-score').textContent = String(roundScore); $('score-to-par').textContent = `Course: ${formatToPar(roundToPar())}`; $('score-to-par').style.color = roundToPar() > 0 ? 'var(--ui-red)' : roundToPar() < 0 ? 'var(--ui-green)' : 'var(--ui-blue)';
-      if (ballState.shotMessage !== lastRenderedShotMessage) { const message = $('shot-message'); lastRenderedShotMessage = ballState.shotMessage; message.textContent = ballState.shotMessage; message.classList.remove('pop'); requestAnimationFrame(() => message.classList.add('pop')); }
+      if (ballState.shotMessage !== lastRenderedShotMessage) { const message = $('shot-message'); lastRenderedShotMessage = ballState.shotMessage; message.textContent = ballState.shotMessage; message.hidden = !ballState.shotMessage || ballState.shotMessage === '—' || $('status').textContent.startsWith(ballState.shotMessage); if (!message.hidden) flashStatusCard(); message.classList.remove('pop'); requestAnimationFrame(() => message.classList.add('pop')); }
       $('wind-mph').textContent = `${wind.mph.toFixed(0)} mph`; const windDegrees = THREE.MathUtils.radToDeg(Math.atan2(wind.vector.x, -wind.vector.z)); const windLean = THREE.MathUtils.clamp(wind.mph / CONFIG.wind.maxMph, 0, 1); $('wind-arrow').style.transform = `rotate(${windDegrees}deg) translateY(${-windLean * 2}px) scale(${1 + windLean * .12})`; $('swing-title').textContent = club.putter ? `Putter · ${Math.round(putterRangeMeters() * 3.281)} ft max` : `${currentClubName} · ${Math.round(metersToYards(club.maxDistanceMeters))} yd`; if (!ballState.inFlight) refreshSuggestion(); else updateClubButtons();
     }
-    function updateStatus(message) { $('status').textContent = message; }
+    // the status bubble is news, not a permanent sign: it shows when something changes, then fades after a few seconds
+    function flashStatusCard() { const card = document.querySelector('.status-card'); card.classList.add('fresh'); clearTimeout(flashStatusCard.t); flashStatusCard.t = setTimeout(() => card.classList.remove('fresh'), 3800); }
+    function updateStatus(message) { const el = $('status'); if (el.textContent === message) return; el.textContent = message; flashStatusCard(); }
 
     function rotateAim(direction) { if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active) return; aimAngleRadians = wrapAngle(aimAngleRadians + THREE.MathUtils.degToRad(CONFIG.aim.stepDegrees * settings.cameraSensitivity) * direction); previewClock = 1; syncGolferAim(); updateStatus(`Aim ${Math.round(THREE.MathUtils.radToDeg(aimAngleRadians))}°`); updateHud(); }
     // Mouse aim is relative and gentle: sliding the mouse sideways nudges the aim a little.
@@ -2630,7 +2734,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     $('tg-go').addEventListener('click', () => completeTeleportLesson());
     $('open-friends').addEventListener('click', () => showFriendsStep(true)); $('friends-back').addEventListener('click', () => showFriendsStep(false));
     $('create-room').addEventListener('click', () => mpCreateOrJoin(false)); $('join-room').addEventListener('click', () => mpCreateOrJoin(true));
-    $('join-code').addEventListener('keydown', e => { if (e.key === 'Enter') mpCreateOrJoin(true); e.stopPropagation(); }); $('player-name').addEventListener('keydown', e => e.stopPropagation());
+    $('join-code').addEventListener('keydown', e => { if (e.key === 'Enter') mpCreateOrJoin(true); e.stopPropagation(); }); $('player-name').addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); if (!$('friends-step').hidden) $('create-room').click(); else $('play-game').click(); } });
     $('lobby-start').addEventListener('click', () => mpPost('start', mpAuth()).catch(e => { $('lobby-wait').textContent = e.message; }));
     $('lobby-leave').addEventListener('click', () => mpLeave());
     // sharing the room: big code tiles, native share sheet on phones, copy buttons everywhere
@@ -2652,6 +2756,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       else { const pars = scorecard.map(r => r.par); $('golf-card-wrap').innerHTML = golfCardHtml([{ name: playerName(), color: '#4d75ef', scores: scorecard.map(r => r.score) }], pars, currentHoleIndex); $('scorecard-hole-tag').textContent = `Playing hole ${currentHoleIndex + 1}`; const t = myRoundStatus(); $('scorecard-subtitle').textContent = t && t.thru ? `${t.toPar === 0 ? 'Even par' : formatToPar(t.toPar)} thru ${t.thru}` : 'No holes finished yet'; showScorecard(); }
       $('scorecard-overlay').classList.remove('mini'); $('next-hole').hidden = false; $('next-hole').textContent = 'Back to the course'; $('card-wait').textContent = ''; $('card-leave').hidden = true; $('scorecard-title').textContent = 'Live scorecard';
     }
+    $('f-nudge').addEventListener('click', () => goToBall());
     $('lb-card').addEventListener('click', openPeekCard); $('mb-score-btn').addEventListener('click', openPeekCard);
     $('card-full').addEventListener('click', () => { cardFullRequested = true; if (mp.active && mp.state) showMpScorecard(mp.state); else renderScorecard(); });
     document.querySelectorAll('.char-card').forEach(c => c.addEventListener('click', () => selectCharacter(c.dataset.character)));
@@ -2690,8 +2795,20 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     });
     window.addEventListener('pointerup', event => { if (touchMode || event.pointerType === 'touch') return; if (event.button === 0 && gameFlow.mode === 'playing') releaseSwingHold(); }); // touch swings are handled by the SWING button
     renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
+    // keys are read by position (event.code), so W A S D sit in the same spot on AZERTY (Z Q S D), QWERTZ, Dvorak…
+    const MOVE_CODES = { KeyW: 'w', ArrowUp: 'w', KeyS: 's', ArrowDown: 's', KeyA: 'a', KeyD: 'd', ShiftLeft: 'shift', ShiftRight: 'shift', ArrowLeft: 'arrowleft', ArrowRight: 'arrowright' };
+    const letterOf = event => (/^Key[A-Z]$/.test(event.code) ? event.code.slice(3).toLowerCase() : (event.key || '').toLowerCase());
+    // pinch / ctrl+wheel would zoom the whole page mid-round and wreck the layout
+    window.addEventListener('wheel', e => { if (e.ctrlKey && gameFlow.mode === 'playing') e.preventDefault(); }, { passive: false });
+    ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => { if (gameFlow.mode === 'playing') e.preventDefault(); }));
     window.addEventListener('keydown', event => {
-      const key = event.key.toLowerCase();
+      // Cmd/Ctrl/Alt shortcuts (reload, new tab, find, print…) belong to the browser, never to the game
+      if (event.metaKey || event.ctrlKey || event.altKey) { Object.keys(movement.keys).forEach(k => { movement.keys[k] = false; }); return; }
+      const key = letterOf(event);
+      if (gameFlow.mode === 'playing') {
+        const f = document.activeElement; if (f && f !== document.body && (f.tagName === 'BUTTON' || f.tagName === 'A')) f.blur(); // Space must swing, not press the last clicked button
+        if (event.key === 'Tab' || event.key === '/' || event.key === "'") event.preventDefault(); // no focus hopping or Firefox quick-find mid-swing
+      }
       if (teleportLesson.active) { event.preventDefault(); if (key === 'f' || key === 'enter' || event.code === 'Space') completeTeleportLesson(); return; }
       if (gameFlow.mode === 'flyover') { event.preventDefault(); finishFlyover(); return; }
       if (gameFlow.mode === 'intro') { event.preventDefault(); beginHolePlay(); return; }
@@ -2710,30 +2827,39 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       if (gameFlow.mode !== 'playing') return;
       if (key === 'e') { event.preventDefault(); if (addressing) leaveAddressMode(); else enterAddressMode(); return; }
       if (CONFIG.debug.enabled && CONFIG.character.allowTeleport && key === CONFIG.character.teleportKey) { event.preventDefault(); teleportGolferToBall(); return; }
-      if (event.code === 'Space') { event.preventDefault(); if (!event.repeat) beginSwingHold(); return; }
+      if (event.code === 'Space') { event.preventDefault(); if (fNudgeWanted()) fNudge.keyed = true; if (!event.repeat) beginSwingHold(); return; }
       if (CONFIG.debug.enabled && key === CONFIG.scoring.skipHoleKey) { event.preventDefault(); skipToNextHole(); return; }
       if (key === CONFIG.character.goToBallKey) { event.preventDefault(); goToBall(); return; }
-      if (['w', 'a', 's', 'd', 'shift', 'arrowleft', 'arrowright'].includes(key)) { event.preventDefault(); movement.keys[key] = true; }
-      Object.entries(CONFIG.clubs).forEach(([name, club]) => { if (event.key === club.key) selectClub(name); });
+      if (!MOVE_CODES[event.code] && fNudgeWanted()) fNudge.keyed = true; // pressed something that can't do anything from here: show the F reminder now
+      const mv = MOVE_CODES[event.code]; if (mv) { event.preventDefault(); movement.keys[mv] = true; }
+      const digit = /^(?:Digit|Numpad)([0-9])$/.exec(event.code); if (digit) Object.entries(CONFIG.clubs).forEach(([name, club]) => { if (digit[1] === club.key) selectClub(name); });
       if (key === CONFIG.preview.toggleKey) togglePreview();
       else if (key === 'r' && !event.repeat) askRestartHole();
       else if (CONFIG.debug.enabled && key === CONFIG.wind.rerollKey) rerollWind();
     });
-    window.addEventListener('keyup', event => { const key = event.key.toLowerCase(); if (event.code === 'Space' && gameFlow.mode === 'playing') releaseSwingHold(); if (['w', 'a', 's', 'd', 'shift', 'arrowleft', 'arrowright'].includes(key)) movement.keys[key] = false; });
+    window.addEventListener('keyup', event => { if (event.code === 'Space' && gameFlow.mode === 'playing') releaseSwingHold(); const mv = MOVE_CODES[event.code]; if (mv) movement.keys[mv] = false; });
     window.addEventListener('blur', clearHeldInputs);
-    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); applyTouchLayout(); renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); });
+    function fitToWindow() { renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, touchMode ? 1.6 : 2)); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); applyTouchLayout(); }
+    window.addEventListener('resize', fitToWindow);
+    // phones report the new size a moment after rotating, and full screen changes size too
+    window.addEventListener('orientationchange', () => setTimeout(fitToWindow, 250)); document.addEventListener('fullscreenchange', () => { setTimeout(fitToWindow, 60); syncFullscreenButtons(); }); document.addEventListener('webkitfullscreenchange', () => setTimeout(fitToWindow, 60));
+    // full screen: a button on the title screen and in the pause menu (hidden where the browser can't do it, e.g. iPhone Safari)
+    const canFullscreen = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+    function toggleFullscreen() { const d = document, el = d.documentElement; try { if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d); else (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch?.(() => {}); } catch (e) {} }
+    function syncFullscreenButtons() { const on = !!(document.fullscreenElement || document.webkitFullscreenElement); document.querySelectorAll('.fs-toggle').forEach(b => { b.hidden = !canFullscreen; b.textContent = on ? 'Exit full screen' : 'Full screen'; }); }
+    document.querySelectorAll('.fs-toggle').forEach(b => b.addEventListener('click', toggleFullscreen)); syncFullscreenButtons();
 
     let previousTime = performance.now(); let accumulator = 0;
     function animate(now) {
       requestAnimationFrame(animate); const frameTime = Math.min((now - previousTime) / 1000, CONFIG.physics.maxFrameTime); previousTime = now;
       if (gameFlow.mode === 'playing') {
         accumulator += frameTime * shotFeel.timeScale; while (accumulator >= CONFIG.physics.fixedTimeStep) { stepPhysics(ballState, spin, CONFIG.physics.fixedTimeStep, false); accumulator -= CONFIG.physics.fixedTimeStep; }
-        updateMovement(frameTime); updateCameraYaw(frameTime); updateTutorial(frameTime); updateCalmMode(); updateTeleportLesson(); updateAimKeys(frameTime); updateSwingMeter(frameTime); updateSwingAnimation(frameTime); updateGolferPose(frameTime);
+        updateMovement(frameTime); updateCameraYaw(frameTime); updateTutorial(frameTime); updateCalmMode(); updateTeleportLesson(); updateAimKeys(frameTime); updateSwingMeter(frameTime); updateSwingAnimation(frameTime); updateGolferPose(frameTime); updateFNudge(frameTime);
       } else accumulator = 0;
       updateHolePresentation(frameTime); updateOnboarding(frameTime); audioEngine.update(frameTime); updateVisuals(frameTime, now); renderer.render(scene, camera);
     }
 
-    loadInitialState(); requestAnimationFrame(animate);
+    loadInitialState(); requestAnimationFrame(animate); document.body.classList.remove('loading');
     // sign-in screen: name, golfer previews, invite links and reconnecting after a refresh
     $('player-name').value = settings.playerName || ''; $('ts-course').textContent = `${COURSE_DATA.holes.length} holes · par ${totalCoursePar()}`; setupCharacterPreviews(); selectCharacter(settings.character);
     (() => { const q = new URLSearchParams(location.search).get('room'); if (q) { $('join-code').value = q.toUpperCase().slice(0, 4); showFriendsStep(true); }

@@ -36,6 +36,19 @@
     }
   };
 
+  // Limited edition pink set (the girl golfer's bag): only the colours change, the shapes are the same clubs
+  const PINK_GRIP = { grip: 0xF7C6DA, shaft: 0xE7A9C0 };
+  const EDITIONS = {
+    pink: {
+      driver: Object.assign({ crown: 0xE8508A, stripe: 0xFFFFFF, sole: 0xE9B8CB, gripBand: 0xE8508A }, PINK_GRIP),
+      wood3: Object.assign({ crown: 0xF27FAE, stripe: 0xFFFFFF, sole: 0xE9B8CB, gripBand: 0xF27FAE }, PINK_GRIP),
+      iron7: Object.assign({ metal: 0xF0C2D0, accent: 0xE8508A, badge: 0xE8508A, gripBand: 0xE8508A }, PINK_GRIP),
+      wedge: Object.assign({ metal: 0xF0C2D0, accent: 0xC2185B, badge: 0xC2185B, gripBand: 0xC2185B }, PINK_GRIP),
+      putter: { body: 0xE8508A, gripBand: 0xE8508A, grip: 0xFFF0F6, shaft: 0xE7A9C0 }
+    }
+  };
+  const EDITION_OUTLINE = { pink: 0x8E2352 }; // berry outline so the thin pink shaft still reads pink
+
   const OUTLINE_COLOR = 0x15314B;
   const DEG = Math.PI / 180;
 
@@ -276,6 +289,7 @@
     const opts = Object.assign({ headScale: 2.2 }, options || {});
     const k = opts.headScale;
     if (opts.length) s = Object.assign({}, s, { length: opts.length });
+    if (opts.edition && EDITIONS[opts.edition]) s = Object.assign({}, s, EDITIONS[opts.edition][type] || {});
 
     const club = new THREE.Group();
     club.name = 'club_' + type;
@@ -301,8 +315,9 @@
     buildShaft(s, club, gripLen, s.length - built.hoselBottom - hoselLen);
     buildHosel(s, club, s.length - built.hoselBottom - hoselLen, s.length - built.hoselBottom);
 
+    if (opts.edition && EDITION_OUTLINE[opts.edition]) { const m = new THREE.MeshBasicMaterial({ color: EDITION_OUTLINE[opts.edition], side: THREE.BackSide }); club.traverse(o => { if (o.name === 'outline') o.material = m; }); }
     club.userData = {
-      type, name: s.name, loft: s.loft, lie: s.lie, length: s.length,
+      type, edition: opts.edition || null, name: s.name, loft: s.loft, lie: s.lie, length: s.length,
       addressTilt: tilt,          // club.rotation.z = addressTilt at address
       head: headPivot,
       hoselBottom
@@ -311,5 +326,5 @@
   }
 
   const TYPES = ['driver', 'wood3', 'iron7', 'wedge', 'putter'];
-  root.GolfClubs = { createClub, SPECS, TYPES };
+  root.GolfClubs = { createClub, SPECS, TYPES, EDITIONS };
 })(typeof window !== 'undefined' ? window : this);

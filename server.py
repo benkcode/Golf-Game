@@ -20,6 +20,7 @@ uses it automatically.
 Run it:   python3 server.py        then open http://localhost:8010
 Online:   set the PORT environment variable (hosts like Render do this for you)
 """
+import gzip
 import json
 import os
 import queue
@@ -30,7 +31,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 PORT = int(os.environ.get("PORT", "8010"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -339,6 +340,13 @@ def new_player(name, character, color):
     }
 
 
+# Text files (the game code, the page, the course) are sent gzip-compressed: about 4x smaller, so the game opens faster
+GZIP_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
+              ".json": "application/json", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8"}
+_gzip_cache = {}
+REAL_ROOT = os.path.realpath(ROOT)
+
+
 class Handler(SimpleHTTPRequestHandler):
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, '.woff2': 'font/woff2', '.js': 'text/javascript'}
     def __init__(self, *args, **kwargs):
@@ -346,6 +354,44 @@ class Handler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         pass  # keep the terminal quiet
+
+    def send_gzipped(self, url_path):
+        """Serve a text file compressed when the browser accepts it. Returns False to fall back to the normal file server."""
+        if "gzip" not in (self.headers.get("Accept-Encoding") or ""):
+            return False
+        rel = unquote(url_path).lstrip("/")
+        if rel == "" or rel.endswith("/"):
+            rel += "index.html"
+        full = os.path.realpath(os.path.join(REAL_ROOT, rel))
+        if not full.startswith(REAL_ROOT + os.sep) or not os.path.isfile(full):
+            return False
+        ext = os.path.splitext(full)[1].lower()
+        if ext not in GZIP_TYPES:
+            return False
+        st = os.stat(full)
+        etag = '"%x-%x-gz"' % (st.st_mtime_ns, st.st_size)
+        if self.headers.get("If-None-Match") == etag:
+            self.send_response(304)
+            self.send_header("ETag", etag)
+            self.end_headers()
+            return True
+        key = (full, st.st_mtime_ns, st.st_size)
+        body = _gzip_cache.get(key)
+        if body is None:
+            with open(full, "rb") as f:
+                body = gzip.compress(f.read(), compresslevel=6)
+            for old_key in [k for k in _gzip_cache if k[0] == full]:
+                _gzip_cache.pop(old_key, None)
+            _gzip_cache[key] = body
+        self.send_response(200)
+        self.send_header("Content-Type", GZIP_TYPES[ext])
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Vary", "Accept-Encoding")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("ETag", etag)
+        self.end_headers()
+        self.wfile.write(body)
+        return True
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-cache")
@@ -384,6 +430,8 @@ class Handler(SimpleHTTPRequestHandler):
             if os.path.basename(url.path).startswith("scores.json"):
                 self.send_response(404)
                 self.end_headers()
+                return
+            if self.send_gzipped(url.path):
                 return
             return super().do_GET()
         qs = parse_qs(url.query)
@@ -509,7 +557,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if not isinstance(path_points, list):
                     path_points = []
                 room.advance_turn()
-                room.send({"type": "shot", "playerId": me["id"], "path": path_points[:900], "result": ball, "holed": me["holed"], "state": room.public_state()})
+                room.send({"type": "shot", "playerId": me["id"], "club": str(result.get("club", ""))[:16], "path": path_points[:900], "result": ball, "holed": me["holed"], "state": room.public_state()})
                 return self.json_reply(200, {"ok": True})
 
             if path == "/api/next":

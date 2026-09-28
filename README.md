@@ -1,14 +1,14 @@
-# Fairway Friends v33
+# Fairway Friends v40
 
 A cartoon 18-hole golf game (par 72, 6,655 yards) you can play solo or against friends on their own computers and phones.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v33.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v40.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v33 && python3 server.py
+cd ~/Downloads/fairway-friends-v40 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -19,10 +19,10 @@ If Terminal says the address is already in use, an older copy is still running: 
 
 ## Playing with friends
 
-On the sign-in screen, type your name and pick your golfer (boy or girl).
+On the sign-in screen, type your name and pick your golfer (boy or girl). The girl golfer carries the limited edition pink club set.
 
-- Tap **Play with friends**, then **Start a room**. It shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
-- Friends tap **Play with friends**, type the code and press **Join**, or just open the invite link (it fills the code in for them).
+- Tap **Play with friends**, then **Create a room**. It shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
+- Friends tap **Play with friends**, type the code and press **Join room**, or just open the invite link (it fills the code in for them).
 - When everyone appears in the lobby, the host presses **Start round**.
 - Up to 4 players. Everyone plays the same wind.
 
@@ -86,15 +86,17 @@ To play on a phone, the phone has to reach the computer running `server.py`: on 
 
 ## Controls
 
-The first time you play, hole 1 walks you through every control. Click **? Controls** (bottom left) any time to see them all or replay the tutorial.
+The first time you play, hole 1 walks you through the controls one short step at a time. Each step moves on by itself once you've done it, and **Skip tutorial** closes it for good. Click **? Controls** (bottom left) any time to see every key or replay the tutorial. The line at the bottom of the screen always shows the keys for what you can do right now.
 
 - `F`: go straight to your ball (set up and aimed at the flag). The game reminds you about this once, then leaves you alone
-- `WASD`: walk; hold `Shift` to jog. Arrow keys or right-drag: look around
+- `WASD` or `↑`/`↓`: walk; hold `Shift` to jog. `←`/`→` or right-drag: look around. Keys go by position, so AZERTY players use `Z Q S D`, and the on-screen key caps show your own keyboard's letters (in Chrome and Edge)
 - `E`: set up at the ball or step away (a bubble saying **E · Hit the ball** pops up when you're close enough)
 - `A/D` (or slide the mouse): aim; hold `Shift` for fine aim
 - `1` Driver, `2` 3-Wood, `3` 7-Iron, `4` Wedge, `5` Putter. The gold **Coach pick** badge shows the best club
 - Hold `Space` (or the mouse) for power, let go, then press again when the bouncing accuracy marker is in the gold zone (it keeps bouncing until you do, no rush)
-- `P`: shot preview on/off. `R`: restart hole (solo only, asks first). `Esc`: pause
+- `P`: shot preview on/off. `R`: restart hole (solo only, asks first). `Enter`: next hole on the scorecard. `Esc`: pause or close a menu
+- Browser shortcuts (Cmd/Ctrl + anything) are left alone, so Cmd+R, Ctrl+W and friends never press game keys by accident
+- **Full screen** is on the title screen and in the pause menu (or press F11 / Ctrl+Cmd+F)
 
 When you finish a hole the game cheers you on ("Nice birdie!", "Nice par!", "Good bogey"…) before the scorecard appears.
 

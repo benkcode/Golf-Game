@@ -6,6 +6,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>Fairway Friends 3D</title>
+  <!-- start every download at once instead of one after another -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
+  <link rel="preload" href="./clubs.js" as="script">
+  <link rel="preload" href="./game.js" as="script">
+  <link rel="preload" href="fonts/fraunces-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/caveat-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin>
   <style>
     :root {
       --ui-font: "Trebuchet MS", system-ui, sans-serif;
@@ -388,7 +395,7 @@
     #tutorial { position: fixed; z-index: 24; left: 18px; top: 50%; transform: translateY(-50%); width: min(340px, calc(100vw - 36px)); padding: 16px 18px 14px; background: #fffdf5; color: #172238; border: 3px solid #172238; border-radius: 20px; box-shadow: 0 8px 0 rgba(23,34,56,.25); font-family: system-ui, -apple-system, sans-serif; animation: tutIn .35s ease; }
     #tutorial.bump { animation: tutBump .45s ease; }
     @keyframes tutIn { from { opacity: 0; transform: translate(-14px, -50%); } to { opacity: 1; transform: translate(0, -50%); } }
-    @keyframes tutBump { 0% { transform: translateY(-50%) scale(1); } 40% { transform: translateY(-50%) scale(1.04); } 100% { transform: translateY(-50%) scale(1); } }
+    @keyframes tutBump { 0% { scale: 1; } 40% { scale: 1.04; } 100% { scale: 1; } } /* scale only, so it never undoes the card's own centring on phones */
     .tut-top { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; color: #5b6b85; }
     #tut-skip { border: 0; background: none; color: #5b6b85; font: 800 12px system-ui, sans-serif; text-decoration: underline; cursor: pointer; padding: 4px; }
     #tut-title { margin: 6px 0 10px; font: 900 22px/1.15 system-ui, -apple-system, sans-serif; }
@@ -589,9 +596,139 @@
       .ts-friends { gap: 6px; } .ts-or { font-size: 19px; margin: 0; } .ts-back { font-size: 19px; padding: 0; }
       .ts-links { margin-top: 0; } .ts-links button { font-size: 14px; }
     }
+    /* ---------- scorecard: a printed club card, filled in by hand ---------- */
+    #scorecard-overlay { background: rgba(12, 28, 20, .5); }
+    #scorecard-overlay .scorecard-panel { position: relative; width: min(860px, 100%); padding: 22px 26px 20px; background: #fbf6e6; border: 2.5px solid #172238; border-radius: 6px; box-shadow: 0 7px 0 #172238, 0 26px 60px rgba(0, 0, 0, .35); }
+    #scorecard-overlay .scorecard-panel::before { content: ""; position: absolute; inset: 7px; border: 1.5px solid #2f6b47; border-radius: 2px; pointer-events: none; }
+    #scorecard-overlay .card-header { margin: 0; padding: 2px 0 7px; background: none; border-radius: 0; border-bottom: 1.5px solid #2f6b47; color: #2f6b47; }
+    #scorecard-overlay .card-club { font: 900 11px system-ui, sans-serif; letter-spacing: .24em; text-transform: uppercase; }
+    #scorecard-overlay .card-tag { padding: 2px 9px; background: none; border: 2px solid #b8322a; border-radius: 4px; color: #b8322a; font: 900 11px system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; transform: rotate(-4deg); }
+    #scorecard-overlay #scorecard-title { margin: 14px 0 0; font: 900 34px/1.05 'YB Serif', Georgia, serif; color: #172238; letter-spacing: -.01em; }
+    #scorecard-overlay #scorecard-title .card-winner { font: inherit; color: inherit; }
+    #scorecard-overlay #scorecard-subtitle { margin: 2px 0 12px; font: 700 23px/1.15 'YB Hand', cursive; color: #1c3f8f; }
+    #scorecard-overlay .golf-card-wrap { border: 1.5px solid #2f6b47; border-radius: 0; background: #fffdf7; }
+    #scorecard-overlay .golf-card { font: 700 20px 'YB Hand', cursive; color: #1c3f8f; }
+    #scorecard-overlay .golf-card.front { border-bottom: 2px solid #2f6b47; }
+    #scorecard-overlay .golf-card th { background: #2f6b47; color: #fbf6e6; font: 800 11px system-ui, sans-serif; letter-spacing: .08em; padding: 6px 3px; }
+    #scorecard-overlay .golf-card th.side { background: #24543a; }
+    #scorecard-overlay .golf-card th.cur { background: #e9b93a; color: #172238; }
+    #scorecard-overlay .golf-card td { height: 36px; padding: 4px 3px; border-top: 1px solid #ddd3b5; border-left: 1px solid #e8e0c8; }
+    #scorecard-overlay .golf-card tr.par td { height: 28px; background: #f4eed9; color: #2f6b47; font: 700 12px system-ui, sans-serif; }
+    #scorecard-overlay .golf-card tr.par td.name { font: 800 10px system-ui, sans-serif; letter-spacing: .14em; color: #2f6b47; }
+    #scorecard-overlay .golf-card td.name { font: 700 22px 'YB Hand', cursive; color: #1c3f8f; }
+    #scorecard-overlay .golf-card td.name i { width: 9px; height: 9px; border: 0; margin-right: 6px; vertical-align: 2px; }
+    #scorecard-overlay .golf-card .out { background: #f4eed9; }
+    #scorecard-overlay .golf-card .tot { font: 700 23px 'YB Hand', cursive; color: #172238; }
+    #scorecard-overlay .golf-card .cur { background: rgba(247, 205, 70, .32) !important; }
+    #scorecard-overlay .golf-card .under { color: #b8322a; } #scorecard-overlay .golf-card .over { color: #1c3f8f; } #scorecard-overlay .golf-card .even { color: #172238; }
+    #scorecard-overlay .mk { width: 27px; height: 27px; font: inherit; line-height: 1; }
+    #scorecard-overlay .mk.birdie { border: 1.8px solid #b8322a; border-radius: 52% 47% 50% 45%; color: #b8322a; }
+    #scorecard-overlay .mk.eagle { border: 1.8px solid #b8322a; border-radius: 50% 46% 52% 47%; box-shadow: 0 0 0 2px #fffdf7, 0 0 0 3.6px #b8322a; color: #b8322a; }
+    #scorecard-overlay .mk.bogey { border: 1.8px solid #1c3f8f; border-radius: 2px 3px 2px 4px; color: #1c3f8f; }
+    #scorecard-overlay .mk.double { border: 1.8px solid #1c3f8f; border-radius: 2px 4px 3px 2px; box-shadow: 0 0 0 2px #fffdf7, 0 0 0 3.6px #1c3f8f; color: #1c3f8f; }
+    #scorecard-overlay .card-legend { gap: 4px 16px; margin: 10px 0 0; font: 700 11px system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #6b6450; }
+    #scorecard-overlay .card-legend > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    #scorecard-overlay .card-legend .mk { width: 19px; height: 19px; font: 700 15px 'YB Hand', cursive; }
+    #scorecard-overlay .card-legend .mk.eagle, #scorecard-overlay .card-legend .mk.double { box-shadow: 0 0 0 1.5px #fbf6e6, 0 0 0 3px currentColor; }
+    .card-sign { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 14px 0 0 !important; font: 800 10px system-ui, sans-serif !important; letter-spacing: .14em; text-transform: uppercase; color: #6b6450 !important; }
+    .card-sign b { min-width: 120px; padding: 0 8px 1px; border-bottom: 1.5px solid #6b6450; font: 700 23px 'YB Hand', cursive; letter-spacing: 0; text-transform: none; color: #1c3f8f; }
+    .card-sign[hidden] { display: none; }
+    #scorecard-overlay .card-actions { gap: 12px; margin-top: 16px; }
+    #scorecard-overlay .card-actions button { border: 2.5px solid #172238; border-radius: 10px; padding: 13px 16px; background: #fbf6e6; color: #172238; font: 800 17px system-ui, -apple-system, sans-serif; cursor: pointer; box-shadow: 0 5px 0 #172238; transition: transform .08s, box-shadow .08s; }
+    #scorecard-overlay .card-actions button:active { transform: translateY(4px); box-shadow: 0 1px 0 #172238; }
+    #scorecard-overlay #next-hole { background: #ffd23f; }
+    #scorecard-overlay #card-leave { color: #b8322a; }
+    #scorecard-overlay .card-rank { margin: 14px 0 0; padding: 10px 0 0; border-top: 1.5px dashed #c9bf9f; border-radius: 0; background: none; font: 700 22px 'YB Hand', cursive; color: #172238; text-align: left; }
+    #scorecard-overlay .card-rank b { color: #b8322a; }
+    #scorecard-overlay .card-rank button { margin-left: 10px; padding: 3px 12px; border: 2px solid #172238; border-radius: 8px; background: #fbf6e6; box-shadow: 0 3px 0 #172238; font: 800 12px system-ui, sans-serif; vertical-align: 3px; }
+    #scorecard-overlay .card-wait { font: 700 20px 'YB Hand', cursive !important; color: #6b6450 !important; }
+    /* phones upright: tighter card, no yardage row, marks sized to the narrow columns */
+    @media (max-width: 560px) {
+      #scorecard-overlay .scorecard-panel { padding: 16px 14px 14px; }
+      #scorecard-overlay .scorecard-panel::before { inset: 5px; }
+      #scorecard-overlay #scorecard-title { font-size: 28px; margin-top: 10px; }
+      #scorecard-overlay #scorecard-subtitle { font-size: 20px; }
+      #scorecard-overlay .card-club { font-size: 9px; letter-spacing: .18em; }
+      #scorecard-overlay .golf-card { font-size: 17px; }
+      #scorecard-overlay .golf-card tr.yds { display: none; }
+      #scorecard-overlay .golf-card th { font-size: 10px; padding: 5px 0; letter-spacing: 0; }
+      #scorecard-overlay .golf-card td { height: 32px; padding: 2px 0; }
+      #scorecard-overlay .golf-card tr.par td { height: 24px; font-size: 11px; }
+      #scorecard-overlay .golf-card td.name { font-size: 17px; }
+      #scorecard-overlay .golf-card tr.par td.name { font-size: 8px; letter-spacing: .06em; }
+      #scorecard-overlay .golf-card .tot { font-size: 18px; }
+      #scorecard-overlay .golf-card td.name i { display: none; }
+      #scorecard-overlay .mk { width: 21px; height: 21px; }
+      #scorecard-overlay .mk.eagle, #scorecard-overlay .mk.double { box-shadow: 0 0 0 1.5px #fffdf7, 0 0 0 3px currentColor; }
+      #scorecard-overlay .card-legend { gap: 4px 10px; font-size: 9px; letter-spacing: .03em; }
+      #scorecard-overlay .card-legend .mk { width: 16px; height: 16px; font-size: 13px; }
+      #scorecard-overlay .card-actions button { padding: 12px; font-size: 16px; }
+      #scorecard-overlay .card-legend > span:nth-child(3) { display: none; }
+      .card-sign b { min-width: 0; padding: 0 6px 1px; font-size: 20px; }
+    }
+    /* phones between holes: the slim strip is a torn-off stub of the same card */
+    #scorecard-overlay.mini .scorecard-panel { padding: 12px 16px 14px; border-radius: 6px; box-shadow: 0 5px 0 #172238, 0 14px 34px rgba(0, 0, 0, .3); }
+    #scorecard-overlay.mini .scorecard-panel::before { inset: 5px; }
+    #scorecard-overlay.mini #scorecard-title { margin: 0; font-size: 24px; }
+    #scorecard-overlay.mini .card-mini-line { margin: 2px 0 10px; font: 700 20px/1.2 'YB Hand', cursive; color: #1c3f8f; }
+    #scorecard-overlay.mini .card-mini-line b { color: #b8322a; }
+    #scorecard-overlay.mini #card-full { border-radius: 10px; padding: 10px 14px; font: 800 14px system-ui, sans-serif; background: #fbf6e6; box-shadow: 0 4px 0 #172238; }
+    #scorecard-overlay.mini .card-actions { margin-top: 0; }
+    #scorecard-overlay.mini .card-sign { display: none; }
+    #scorecard-overlay.mini .card-wait { font-size: 17px !important; margin-top: 6px !important; }
+    @media (max-height: 520px) and (orientation: landscape) {
+      #scorecard-overlay .scorecard-panel { padding: 12px 16px; }
+      #scorecard-overlay #scorecard-title { font-size: 24px; margin-top: 8px; }
+      #scorecard-overlay #scorecard-subtitle { font-size: 19px; margin-bottom: 8px; }
+      #scorecard-overlay .golf-card tr.yds { display: none; }
+      #scorecard-overlay .golf-card td { height: 28px; } #scorecard-overlay .golf-card tr.par td { height: 22px; }
+      #scorecard-overlay .card-actions { margin-top: 10px; } #scorecard-overlay .card-actions button { padding: 9px 12px; font-size: 15px; }
+      #scorecard-overlay .card-legend { display: none; }
+      #scorecard-overlay .golf-card td { height: 25px; padding: 1px 3px; } #scorecard-overlay .golf-card tr.par td { height: 20px; } #scorecard-overlay .golf-card th { padding: 3px; }
+      #scorecard-overlay .mk { width: 21px; height: 21px; }
+      #scorecard-overlay .card-header { padding-bottom: 4px; }
+      #scorecard-overlay .card-sign { margin-top: 6px !important; } .card-sign b { font-size: 19px; }
+    }
+    #hint:empty, .meter-note:empty { display: none; }
+    @media (max-width: 640px) { .ts-links .fs-toggle { display: none; } }
+    .mouse-ico { flex: none; overflow: visible; margin: 0 8px; vertical-align: middle; }
+    #hint kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 5px; margin: 0 1px; border: 1.5px solid #172238; border-bottom-width: 3px; border-radius: 6px; background: #fff; color: #172238; font: 900 11px system-ui, sans-serif; vertical-align: 1px; }
+    #hint .mouse-ico { width: 15px; height: 21px; margin: 0 5px; vertical-align: -5px; }
+    /* keyboard players see which key does the same thing as the button */
+    body:not(.touch) [data-key]::after { content: attr(data-key); display: inline-grid; place-items: center; height: 18px; margin-left: 9px; padding: 0 6px; border: 1.5px solid currentColor; border-bottom-width: 3px; border-radius: 5px; font: 800 10px system-ui, sans-serif; letter-spacing: .02em; opacity: .7; vertical-align: 1px; }
+    /* calmer HUD: news bubble fades out, no captions that repeat what the icons already say */
+    .hud .status-card { opacity: 0; transition: opacity .5s ease; pointer-events: none; }
+    .hud .status-card.fresh { opacity: 1; transition-duration: .15s; }
+    #shot-message[hidden] { display: none; }
+    .wind-card small { display: none; }
+    .wind-card { min-width: 0; padding: 7px 14px; }
+    .score-card .eyebrow, #reset { display: none; }
+    .score-card { min-width: 0; padding: 9px 14px; }
+    .score-card .score-row { margin-top: 0; }
+    #score-to-par { margin-top: 5px; }
+    /* strike feedback on the meter */
+    #swing-hud.hit-pure { animation: hitGlow 1s ease; --hit: rgba(255, 200, 40, .95); }
+    #swing-hud.hit-great { animation: hitGlow 1s ease; --hit: rgba(60, 200, 110, .9); }
+    #swing-hud.hit-miss { animation: hitShake .5s ease; --hit: rgba(240, 140, 40, .9); }
+    #swing-hud.hit-bad { animation: hitShake .55s ease; --hit: rgba(220, 60, 50, .9); }
+    #swing-hud[class*="hit-"] #accuracy-marker { background: var(--hit); box-shadow: 0 0 0 2px #fff, 0 0 12px var(--hit); }
+    @keyframes hitGlow { 0% { box-shadow: 0 0 0 0 var(--hit); } 25% { box-shadow: 0 0 0 7px var(--hit), 0 0 30px var(--hit); } 100% { box-shadow: 0 0 0 0 transparent; } }
+    @keyframes hitShake { 0%, 100% { translate: 0 0; } 20% { translate: -5px 0; } 40% { translate: 5px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+    @media (prefers-reduced-motion: reduce) { #swing-hud[class*="hit-"] { animation: none; } }
+    /* until the game code has arrived the buttons wait (they'd do nothing yet) */
+    .ts-loading { display: none; }
+    body.loading .ts-loading { display: inline; }
+    body.loading .ts-go, body.loading .ts-friends { opacity: .5; pointer-events: none; }
+    /* "press F" reminder once the ball has stopped */
+    #f-nudge { position: fixed; z-index: 8; left: 50%; bottom: 150px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; padding: 10px 22px 10px 10px; border: 3px solid #172238; border-radius: 16px; background: #ffd23f; color: #172238; font: 900 20px system-ui, -apple-system, sans-serif; box-shadow: 0 6px 0 #172238, 0 14px 30px rgba(0,0,0,.25); cursor: pointer; animation: fNudgeIn .35s cubic-bezier(.2,1.4,.4,1), fNudgeBob 1.6s ease-in-out .4s infinite; }
+    #f-nudge[hidden] { display: none; }
+    #f-nudge kbd { display: inline-grid; place-items: center; width: 44px; height: 44px; border: 2.5px solid #172238; border-bottom-width: 6px; border-radius: 10px; background: #fff; font: 900 22px system-ui, sans-serif; }
+    @keyframes fNudgeIn { from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(.9); } to { opacity: 1; transform: translateX(-50%); } }
+    @keyframes fNudgeBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+    @media (prefers-reduced-motion: reduce) { #f-nudge { animation: none; } }
   </style>
 </head>
-<body>
+<body class="loading">
   <div id="game"></div>
   <div class="hud">
     <section class="top-left yardage-book" aria-label="Hole information">
@@ -606,7 +743,7 @@
       <div class="yb-notes"><span><b id="pin-distance">350</b></span><span>lie: <b id="lie">tee</b></span><span>pin: <b id="pin-spot">middle</b></span></div>
     </section>
 
-    <section class="hud-card wind-card">
+    <section class="hud-card wind-card" title="Wind speed and direction">
       <div class="wind-row"><span id="wind-arrow">↑</span><b id="wind-mph">0 mph</b></div>
       <small>Wind speed and direction</small>
     </section>
@@ -665,7 +802,7 @@
       </div>
     </div>
     <aside id="tutorial" hidden aria-live="polite">
-      <div class="tut-top"><span id="tut-step">Step 1 of 8</span><button id="tut-skip" type="button">Skip tutorial</button></div>
+      <div class="tut-top"><span id="tut-step">Step 1 of 8</span><button id="tut-skip" type="button">Skip tutorial ✕</button></div>
       <h3 id="tut-title"></h3>
       <div id="tut-keys" class="tut-keys"></div>
       <p id="tut-text"></p>
@@ -673,17 +810,18 @@
     </aside>
     <button id="controls-chip" type="button" aria-expanded="false">? Controls</button>
     <div id="controls-panel" hidden>
-      <div class="cp-row"><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>Walk (hold Shift to jog)</div>
-      <div class="cp-row"><span><kbd>←</kbd><kbd>→</kbd></span>Look around (or right-drag)</div>
-      <div class="cp-row"><span><kbd>F</kbd></span>Jump to your ball</div>
-      <div class="cp-row"><span><kbd>E</kbd></span>Set up / step away</div>
-      <div class="cp-row"><span><kbd>A</kbd><kbd>D</kbd></span>Aim (or slide the mouse)</div>
+      <div class="cp-row"><span><kbd data-code="KeyW">W</kbd><kbd data-code="KeyA">A</kbd><kbd data-code="KeyS">S</kbd><kbd data-code="KeyD">D</kbd></span>Walk · or <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Shift</kbd> jog</div>
+      <div class="cp-row"><span><kbd>←</kbd><kbd>→</kbd></span>Look around · or right-drag</div>
+      <div class="cp-row"><span><kbd data-code="KeyF">F</kbd></span>Go to your ball</div>
+      <div class="cp-row"><span><kbd data-code="KeyE">E</kbd></span>Set up / step away</div>
+      <div class="cp-row"><span><kbd data-code="KeyA">A</kbd><kbd data-code="KeyD">D</kbd></span>Aim · or slide the mouse</div>
       <div class="cp-row"><span><kbd>1</kbd>–<kbd>5</kbd></span>Pick a club</div>
-      <div class="cp-row"><span><kbd>Space</kbd></span>Hold for power, press again to hit</div>
-      <div class="cp-row"><span><kbd>P</kbd></span>Shot preview on/off</div>
-      <div class="cp-row"><span><kbd>R</kbd></span>Restart hole (asks first)</div>
-      <div class="cp-row"><span><kbd>Esc</kbd></span>Pause</div>
-      <button id="replay-tutorial" type="button">Replay tutorial</button>
+      <div class="cp-row"><span><kbd>Space</kbd></span>Hold for power, press again to hit · or left mouse</div>
+      <div class="cp-row"><span><kbd data-code="KeyP">P</kbd></span>Shot preview on/off</div>
+      <div class="cp-row"><span><kbd data-code="KeyR">R</kbd></span>Restart hole (asks first)</div>
+      <div class="cp-row"><span><kbd>Enter</kbd></span>Next hole (on the scorecard)</div>
+      <div class="cp-row"><span><kbd>Esc</kbd></span>Pause · close menus</div>
+      <button id="replay-tutorial" type="button">Replay the tutorial</button>
     </div>
 
   <!-- phone / tablet controls (shown only on touch screens) -->
@@ -695,7 +833,7 @@
     <button id="mb-score-btn" type="button" aria-label="Your score, tap for the scorecard"><b id="mb-score">E</b><small id="mb-place"></small></button>
   </div>
   <div id="touch-ui" hidden>
-    <button id="t-ball" type="button">⛳ To ball</button>
+    <button id="t-ball" type="button">Go to ball</button>
     <div id="t-aim-hint" hidden><span>◀</span> drag to aim <span>▶</span></div>
     <button id="t-swing" type="button" aria-label="Swing"><b id="t-swing-label">SWING</b><small id="t-swing-sub">hold</small></button>
   </div>
@@ -705,13 +843,14 @@
 
   <section id="scorecard-overlay" hidden>
     <div class="scorecard-panel">
-      <div class="card-header"><span class="card-club">⛳ Fairway Friends Golf Club</span><span id="scorecard-hole-tag" class="card-tag">Hole 1</span></div>
+      <div class="card-header"><span class="card-club">Fairway Friends Golf Club</span><span id="scorecard-hole-tag" class="card-tag">Hole 1</span></div>
       <h2 id="scorecard-title">Hole complete</h2>
       <p id="scorecard-subtitle">Nice work.</p>
       <div id="golf-card-wrap" class="golf-card-wrap"></div>
-      <p class="card-legend"><span class="mk eagle">2</span> eagle <span class="mk birdie">3</span> birdie <span class="mk">4</span> par <span class="mk bogey">5</span> bogey <span class="mk double">6</span> double+</p>
+      <p class="card-legend"><span><span class="mk eagle">2</span>eagle</span><span><span class="mk birdie">3</span>birdie</span><span><span class="mk">4</span>par</span><span><span class="mk bogey">5</span>bogey</span><span><span class="mk double">6</span>double+</span></p>
+      <p id="card-sign" class="card-sign" hidden></p>
       <p id="card-mini-line" class="card-mini-line"></p>
-      <div class="card-actions"><button id="next-hole" type="button">Next hole</button><button id="card-full" type="button">Full card</button><button id="card-leave" type="button" hidden>Leave room</button></div>
+      <div class="card-actions"><button id="next-hole" data-key="Enter" type="button">Next hole</button><button id="card-full" type="button">Full scorecard</button><button id="card-leave" type="button" hidden>Leave room</button></div>
       <p id="card-rank" class="card-rank" hidden></p>
       <p id="card-wait" class="card-wait"></p>
     </div>
@@ -721,7 +860,7 @@
     <div class="ts">
       <div class="ts-head">
         <h1 class="ts-title">Fairway <span>Friends</span></h1>
-        <p class="ts-note"><span id="ts-course">18 holes · par 72</span><span id="best-score" class="best-score empty"></span></p>
+        <p class="ts-note"><span class="ts-loading">loading the course…</span><span id="ts-course">18 holes · par 72</span><span id="best-score" class="best-score empty"></span></p>
       </div>
       <label class="ts-name"><span>Player</span><input id="player-name" maxlength="14" autocomplete="off" placeholder="your name" aria-label="Your name"></label>
       <div class="char-pick" role="radiogroup" aria-label="Choose your golfer">
@@ -729,17 +868,17 @@
         <button class="char-card" type="button" role="radio" data-character="girl" aria-label="Girl golfer"><canvas width="400" height="360"></canvas><b>Girl</b></button>
       </div>
       <div class="ts-go">
-        <button id="play-game" class="ts-btn ts-primary" type="button">Tee off</button>
+        <button id="play-game" class="ts-btn ts-primary" type="button">Tee off solo</button>
         <button id="open-friends" class="ts-btn" type="button">Play with friends</button>
       </div>
       <div id="friends-step" class="ts-friends" hidden>
-        <button id="create-room" class="ts-btn ts-primary" type="button">Start a room</button>
+        <button id="create-room" class="ts-btn ts-primary" type="button">Create a room</button>
         <div class="ts-or">or join a friend’s room</div>
-        <div class="join-row"><input id="join-code" class="code-input" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code"><button id="join-room" class="ts-btn" type="button">Join</button></div>
+        <div class="join-row"><input id="join-code" class="code-input" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code"><button id="join-room" class="ts-btn" type="button">Join room</button></div>
         <button id="friends-back" class="ts-back" type="button">← back</button>
       </div>
       <p id="signin-error" class="menu-error" role="alert"></p>
-      <nav class="ts-links"><button id="open-board" type="button">Leaderboard</button><button id="open-how" type="button">How to play</button><button id="open-settings-main" type="button">Settings</button></nav>
+      <nav class="ts-links"><button id="open-board" type="button">Leaderboard</button><button id="open-how" type="button">How to play</button><button id="open-settings-main" type="button">Settings</button><button class="fs-toggle" type="button" hidden>Full screen</button></nav>
     </div>
   </section>
 
@@ -763,7 +902,7 @@
 
   <section id="board-menu" class="screen-overlay" hidden>
     <div class="menu-panel board-panel">
-      <div class="board-head"><div><div class="eyebrow">Fairway Friends Golf Club</div><h2>Leaderboard</h2></div><button id="board-close" class="menu-button" type="button">Close</button></div>
+      <div class="board-head"><div><div class="eyebrow">Fairway Friends Golf Club</div><h2>Leaderboard</h2></div><button id="board-close" data-key="Esc" class="menu-button" type="button">Close</button></div>
       <div class="board-tabs" role="tablist">
         <button type="button" role="tab" data-period="all" class="on">All-time</button><button type="button" role="tab" data-period="week">This week</button><button type="button" role="tab" data-period="today">Today</button><button type="button" role="tab" data-period="mine">My rounds</button>
       </div>
@@ -783,7 +922,7 @@
         <div class="rule"><b>4. Finish the hole.</b> Play every next shot from where the ball stops. A low score wins. Water and out of bounds add one stroke.</div>
         <div class="rule"><b>Putting tip.</b> Every green has its own hills. When you set up with the Putter, little dots flow downhill: the faster they move, the more the ball will curve. The line only shows the start of your putt, so aim up the hill and let it roll down to the cup.</div>
       </div>
-      <button id="close-how" class="menu-button primary" type="button">Got it</button>
+      <button id="close-how" data-key="Esc" class="menu-button primary" type="button">Back to menu</button>
       <button id="how-replay-tutorial" class="menu-button" type="button">Replay the hole 1 tutorial next time</button>
     </div>
   </section>
@@ -802,7 +941,7 @@
         <div class="setting-row"><label for="setting-camera">Camera and key speed<small>How fast the camera follows and A/D turns your aim</small></label><div class="range-control"><input id="setting-camera" type="range" min="50" max="200" step="10" /><span id="setting-camera-value" class="range-value">1.0×</span></div></div>
         <div class="setting-row"><label for="setting-preview">Trajectory preview<small>Show the dotted predicted ball flight</small></label><input id="setting-preview" type="checkbox" /></div>
       </div>
-      <button id="close-settings" class="menu-button primary" type="button">Back</button>
+      <button id="close-settings" data-key="Esc" class="menu-button primary" type="button">Done</button>
     </div>
   </section>
 
@@ -812,7 +951,7 @@
       <h2>Start this hole over?</h2>
       <p class="menu-subtitle">Your strokes on this hole will be cleared and you'll tee off again.</p>
       <div class="menu-actions">
-        <button id="confirm-restart-no" class="menu-button primary" type="button">Keep playing</button>
+        <button id="confirm-restart-no" data-key="Esc" class="menu-button primary" type="button">Keep playing</button>
         <button id="confirm-restart-yes" class="menu-button danger" type="button">Yes, restart hole</button>
       </div>
     </div>
@@ -823,9 +962,10 @@
       <h2>Take a breather</h2>
       <p class="menu-subtitle">Your ball and swing are frozen until you resume.</p>
       <div class="menu-actions">
-        <button id="resume-game" class="menu-button primary" type="button">Resume</button>
+        <button id="resume-game" data-key="Esc" class="menu-button primary" type="button">Resume</button>
         <button id="restart-hole-menu" class="menu-button" type="button">Restart hole</button>
         <button id="open-settings-pause" class="menu-button" type="button">Settings</button>
+        <button class="menu-button fs-toggle" type="button" hidden>Full screen</button>
         <button id="quit-menu" class="menu-button danger" type="button">Quit to menu</button>
       </div>
     </div>
@@ -836,6 +976,7 @@
     <h2 id="intro-title">Hole 1</h2>
     <p id="intro-details">Par 4 · 350 yards</p>
   </section>
+  <button id="f-nudge" type="button" hidden><kbd data-code="KeyF">F</kbd><span>Go to your ball</span></button>
   <div id="flyover-skip" hidden>Press any key to skip flyover</div>
   <div id="tip-toast"><b>Quick tip</b><span id="tip-text"></span></div>
 
