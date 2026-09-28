@@ -34,7 +34,20 @@ from urllib.parse import parse_qs, urlparse
 
 PORT = int(os.environ.get("PORT", "8010"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
-PARS = [4, 4, 3, 5, 4, 3, 4, 4, 5]          # must match course-data.js
+def read_pars():
+    """Pars come straight from course-data.js, so the server always matches the course."""
+    try:
+        import re
+        with open(os.path.join(ROOT, "course-data.js"), encoding="utf-8") as f:
+            pars = [int(p) for p in re.findall(r"\bpar:\s*(\d+)", f.read())]
+        if pars and all(3 <= p <= 6 for p in pars):
+            return pars
+    except OSError:
+        pass
+    return [4, 4, 3, 5, 4, 3, 4, 4, 5, 4, 5, 3, 4, 4, 3, 5, 4, 4]
+
+
+PARS = read_pars()
 MAX_SCORE_MULTIPLIER = 2
 MAX_PLAYERS = 4
 MAX_WIND_MPH = 11
@@ -158,7 +171,7 @@ def flush_scores():
 
 
 def record_round(name, holes, character, device, mode, round_id):
-    """Validate and save one finished nine-hole round. Returns the saved entry, or None."""
+    """Validate and save one finished round (every hole of the course). Returns the saved entry, or None."""
     if not isinstance(holes, list) or len(holes) != len(PARS):
         return None
     try:
@@ -186,7 +199,8 @@ def leaderboard(period="all", limit=50, device=""):
     now = time.time()
     since = {"today": now - 86400, "week": now - 7 * 86400}.get(period, 0)
     with score_lock:
-        rows = [r for r in saved_rounds if r["when"] >= since]
+        # only full rounds of today's course compete (older nine-hole rounds stay saved but don't mix into an 18-hole board)
+        rows = [r for r in saved_rounds if r["when"] >= since and len(r.get("holes", ())) == len(PARS)]
     best = {}                                        # each golfer's best round (by device, else by name)
     for r in rows:
         key = r.get("device") or ("name:" + r["name"].lower())
@@ -201,7 +215,7 @@ def leaderboard(period="all", limit=50, device=""):
                         "mode": r["mode"], "character": r["character"], "me": bool(device) and r.get("device") == device})
     mine = next((e for e in entries if e["me"]), None)
     return {"period": period, "players": len(entries), "rounds": len(rows), "entries": entries[:limit],
-            "me": mine, "storage": "upstash" if UPSTASH_URL and UPSTASH_TOKEN else "file"}
+            "me": mine, "holes": len(PARS), "par": sum(PARS), "storage": "upstash" if UPSTASH_URL and UPSTASH_TOKEN else "file"}
 
 
 class Room:
@@ -233,6 +247,7 @@ class Room:
             "turnId": self.turn_id,
             "wind": self.winds[self.hole],
             "pars": PARS,
+            "round": self.round_no,
             "players": [{
                 "id": p["id"], "name": p["name"], "character": p["character"], "color": p["color"],
                 "scores": p["scores"], "ball": p["ball"], "strokes": p["strokes"], "done": p["done"],
@@ -285,7 +300,7 @@ class Room:
                 return
 
     def record_scores(self):
-        """Save every player who finished all nine holes to the leaderboard (once per round)."""
+        """Save every player who finished every hole to the leaderboard (once per round)."""
         if self.recorded:
             return
         self.recorded = True

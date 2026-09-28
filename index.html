@@ -476,6 +476,12 @@
     .card-club { font: 700 14px Georgia, serif; letter-spacing: .04em; } .card-tag { font: 900 12px system-ui, sans-serif; background: #f2c14e; color: #1f4d2e; padding: 3px 10px; border-radius: 99px; }
     .golf-card-wrap { overflow-x: auto; border: 2px solid #1f4d2e; border-radius: 10px; background: #fff; }
     .golf-card { width: 100%; border-collapse: collapse; font: 700 14px Georgia, 'Times New Roman', serif; color: #172238; min-width: 640px; }
+    .golf-card.front { border-bottom: 3px solid #1f4d2e; }
+    @supports (height: 100dvh) { .scorecard-panel { max-height: min(820px, calc(100dvh - 24px)); } }
+    .golf-card th.side { text-align: left; padding-left: 10px; letter-spacing: .12em; background: #16391f; }
+    .golf-card th:first-child, .golf-card td.name { width: 92px; }
+    .golf-card .sm { display: none; }
+    @media (max-width: 560px) { .golf-card { min-width: 0; table-layout: fixed; font-size: 12px; } .golf-card .lg { display: none; } .golf-card .sm { display: inline; } .golf-card th.sum { width: 31px; } .golf-card tr.yds td { font-size: 8.5px !important; letter-spacing: -.02em; } .golf-card th:first-child, .golf-card td.name { width: 42px; padding-left: 4px !important; font-size: 11px; overflow: hidden; text-overflow: ellipsis; } .golf-card td.name i { display: none !important; } .golf-card td { height: 26px; padding: 3px 0; } .golf-card th { padding: 4px 0; font-size: 10px; letter-spacing: 0; } .golf-card th.side { padding-left: 5px; letter-spacing: .04em; } .golf-card tr.par td { font-size: 10px; } .golf-card .mk { transform: scale(.85); } .golf-card-wrap { overflow-x: hidden; } }
     .golf-card th { background: #1f4d2e; color: #f7f1dc; font: 900 11px system-ui, sans-serif; letter-spacing: .06em; padding: 7px 4px; }
     .golf-card td { text-align: center; padding: 7px 4px; border-top: 1px solid #e3dcc4; border-left: 1px solid #efe9d6; height: 34px; }
     .golf-card td.name { text-align: left; padding-left: 10px; font: 900 14px system-ui, sans-serif; white-space: nowrap; }
@@ -522,6 +528,67 @@
     #go-fade { position: fixed; inset: 0; background: #0f1d2e; opacity: 0; pointer-events: none; transition: opacity .2s ease; z-index: 50; }
     #go-fade.on { opacity: 1; }
     @media (prefers-reduced-motion: reduce) { #go-fade { transition: none; } }
+    /* ---------- title screen: the course is the backdrop, no floating panel ---------- */
+    #main-menu.title-screen { place-items: safe center start; padding: 24px clamp(20px, 6vw, 88px); background: radial-gradient(120% 100% at 0% 50%, rgba(10, 30, 20, .62), rgba(10, 30, 20, .28) 55%, rgba(10, 30, 20, .08) 80%); }
+    .ts { width: min(470px, 100%); display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; color: #fbf3dc; text-align: left; }
+    .ts-title { margin: 0; font: 900 clamp(52px, 9.5vh, 86px)/.9 'YB Serif', Georgia, serif; letter-spacing: -.02em; color: #fbf3dc; text-shadow: 0 5px 0 #173a26, 0 12px 26px rgba(0,0,0,.25); }
+    .ts-title span { display: block; }
+    .ts-note { margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font: 700 25px/1.1 'YB Hand', cursive; color: #ffe08a; }
+    .ts-note .best-score { margin: 0; padding: 0; border: 0; background: none; color: #fbf3dc; font: inherit; }
+    .ts-note .best-score.empty { display: none; }
+    .ts-name { display: flex; align-items: center; gap: 12px; padding: 4px 14px; background: #fbf3dc; border: 2.5px solid #172238; border-radius: 10px; box-shadow: 0 4px 0 #172238; cursor: text; }
+    .ts-name span { font: 900 11px system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: #6b6450; }
+    .ts-name input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; padding: 2px 0; font: 700 28px/1.2 'YB Hand', cursive; color: #1c3f8f; }
+    .ts-name input::placeholder { color: #b3a988; }
+    .ts-name:focus-within { box-shadow: 0 4px 0 #172238, 0 0 0 3px #ffd23f; }
+    .ts .char-pick { width: min(100%, 56vh); gap: 12px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .ts .char-card { min-width: 0; }
+    .ts-go, .ts-friends { display: grid; grid-template-columns: 1fr 1.35fr; gap: 12px; margin-top: 4px; }
+    .ts-friends { grid-template-columns: 1fr; gap: 9px; }
+    .ts-friends[hidden], .ts-go[hidden] { display: none; }
+    .ts-btn { border: 2.5px solid #172238; border-radius: 10px; padding: 14px 18px; background: #fbf3dc; color: #172238; font: 800 18px system-ui, -apple-system, sans-serif; cursor: pointer; box-shadow: 0 5px 0 #172238; transition: transform .08s, box-shadow .08s; -webkit-tap-highlight-color: transparent; }
+    .ts-btn.ts-primary { background: #ffd23f; }
+    .ts-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 0 #172238; }
+    .ts-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 #172238; }
+    .ts-or { font: 700 22px 'YB Hand', cursive; color: #ffe08a; margin-top: 4px; }
+    .ts .join-row { grid-template-columns: 1fr auto; gap: 10px; }
+    .ts .code-input { width: 100%; box-sizing: border-box; border: 2.5px solid #172238; border-radius: 10px; background: #fbf3dc; box-shadow: 0 5px 0 #172238; padding: 10px; font: 900 22px system-ui, sans-serif; color: #172238; text-transform: uppercase; letter-spacing: .4em; text-align: center; }
+    .ts .code-input::placeholder { color: #b3a988; letter-spacing: .3em; }
+    .ts .join-row .ts-btn { padding: 12px 22px; }
+    .ts-back { justify-self: start; border: 0; background: none; padding: 4px 0; font: 700 22px 'YB Hand', cursive; color: #fbf3dc; cursor: pointer; }
+    .ts .menu-error { margin: 0; padding: 8px 12px; border-radius: 8px; background: #fff0ee; color: #bd3f38; font: 800 14px system-ui, sans-serif; }
+    .ts .menu-error:empty { display: none; }
+    .ts-links { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 6px; }
+    .ts-links button { border: 0; background: none; padding: 4px 0; color: #fbf3dc; font: 700 15px system-ui, sans-serif; cursor: pointer; border-bottom: 2px dotted rgba(251, 243, 220, .55); }
+    .ts-links button:hover { color: #ffe08a; border-bottom-color: #ffe08a; }
+    /* phones held upright */
+    @media (max-width: 640px) {
+      #main-menu.title-screen { place-items: start stretch; padding: max(22px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); background: linear-gradient(rgba(10, 30, 20, .55), rgba(10, 30, 20, .35) 45%, rgba(10, 30, 20, .6)); }
+      .ts { width: 100%; gap: 12px; min-height: 100%; grid-template-rows: auto auto auto 1fr auto auto auto; } /* the big buttons sit low, where thumbs are */
+      .ts-go, .ts-friends { align-self: end; }
+      #main-menu.title-screen { grid-template-rows: 100%; }
+      .ts-title { font-size: min(15vw, 62px); }
+      .ts-note { font-size: 22px; margin-top: 6px; }
+      .ts .char-pick { width: 100%; gap: 10px; }
+      .ts-go { grid-template-columns: 1fr; gap: 12px; }
+      .ts-btn { padding: 15px; font-size: 18px; }
+      .ts-links { justify-content: space-between; gap: 6px 10px; }
+    }
+    @media (max-width: 640px) and (max-height: 720px) { .ts-title { font-size: min(10.5vw, 44px); } .ts-title span { display: inline; } .ts .char-pick { width: 84%; } .ts-btn { padding: 12px; } }
+    /* phones on their side: words on the left, golfers on the right, no scrolling */
+    @media (max-height: 520px) and (orientation: landscape) {
+      #main-menu.title-screen { place-items: safe center; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background: linear-gradient(90deg, rgba(10, 30, 20, .62), rgba(10, 30, 20, .3)); }
+      .ts { width: min(860px, 100%); grid-template-columns: minmax(0, 1fr) min(44vw, 82vh); column-gap: 22px; row-gap: 9px; align-items: start; }
+      .ts > * { grid-column: 1; }
+      .ts .char-pick { grid-column: 2; grid-row: 1 / span 6; align-self: center; width: 100%; gap: 8px; }
+      .ts-title { font-size: clamp(30px, 10vh, 44px); } .ts-title span { display: inline; }
+      .ts-note { font-size: 20px; margin-top: 2px; }
+      .ts-name input { font-size: 24px; padding: 0; }
+      .ts-go { grid-template-columns: 1fr 1.35fr; gap: 10px; margin-top: 2px; }
+      .ts-btn { padding: 10px 12px; font-size: 16px; box-shadow: 0 4px 0 #172238; }
+      .ts .code-input { padding: 7px; font-size: 18px; }
+      .ts-friends { gap: 6px; } .ts-or { font-size: 19px; margin: 0; } .ts-back { font-size: 19px; padding: 0; }
+      .ts-links { margin-top: 0; } .ts-links button { font-size: 14px; }
+    }
   </style>
 </head>
 <body>
@@ -650,26 +717,29 @@
     </div>
   </section>
 
-  <section id="main-menu" class="screen-overlay">
-    <div class="menu-panel signin-panel">
-      <div class="menu-logo" aria-hidden="true">⛳</div>
-      <div class="eyebrow">A friendly nine-hole round</div>
-      <h1>Fairway Friends</h1>
-      <div id="best-score" class="best-score">Best score: no round yet</div>
-      <label class="field" for="player-name">Your name</label>
-      <input id="player-name" class="text-input" maxlength="14" autocomplete="off" placeholder="Type your name">
-      <div class="field">Choose your golfer</div>
+  <section id="main-menu" class="screen-overlay title-screen">
+    <div class="ts">
+      <div class="ts-head">
+        <h1 class="ts-title">Fairway <span>Friends</span></h1>
+        <p class="ts-note"><span id="ts-course">18 holes · par 72</span><span id="best-score" class="best-score empty"></span></p>
+      </div>
+      <label class="ts-name"><span>Player</span><input id="player-name" maxlength="14" autocomplete="off" placeholder="your name" aria-label="Your name"></label>
       <div class="char-pick" role="radiogroup" aria-label="Choose your golfer">
         <button class="char-card" type="button" role="radio" data-character="boy" aria-label="Boy golfer"><canvas width="400" height="360"></canvas><b>Boy</b></button>
         <button class="char-card" type="button" role="radio" data-character="girl" aria-label="Girl golfer"><canvas width="400" height="360"></canvas><b>Girl</b></button>
       </div>
-      <div class="menu-actions">
-        <button id="create-room" class="menu-button primary" type="button">Create a room</button>
-        <div class="join-row"><input id="join-code" class="text-input code-input" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code"><button id="join-room" class="menu-button" type="button">Join room</button></div>
-        <button id="play-game" class="menu-button" type="button">Practice solo</button>
-        <div class="menu-row three"><button id="open-board" class="menu-button" type="button">🏆 Leaderboard</button><button id="open-how" class="menu-button" type="button">How to Play</button><button id="open-settings-main" class="menu-button" type="button">Settings</button></div>
+      <div class="ts-go">
+        <button id="play-game" class="ts-btn ts-primary" type="button">Tee off</button>
+        <button id="open-friends" class="ts-btn" type="button">Play with friends</button>
+      </div>
+      <div id="friends-step" class="ts-friends" hidden>
+        <button id="create-room" class="ts-btn ts-primary" type="button">Start a room</button>
+        <div class="ts-or">or join a friend’s room</div>
+        <div class="join-row"><input id="join-code" class="code-input" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code"><button id="join-room" class="ts-btn" type="button">Join</button></div>
+        <button id="friends-back" class="ts-back" type="button">← back</button>
       </div>
       <p id="signin-error" class="menu-error" role="alert"></p>
+      <nav class="ts-links"><button id="open-board" type="button">Leaderboard</button><button id="open-how" type="button">How to play</button><button id="open-settings-main" type="button">Settings</button></nav>
     </div>
   </section>
 
@@ -678,7 +748,7 @@
       <div class="code-ticket">
         <div class="eyebrow">Your room code</div>
         <button id="lobby-code" class="lobby-code" type="button" aria-label="Room code, tap to copy"><span>·</span><span>·</span><span>·</span><span>·</span></button>
-        <p class="code-help">Friends open the game, tap <b>Join room</b> and type this code.</p>
+        <p class="code-help">Friends open the game, tap <b>Play with friends</b> and type this code.</p>
         <div class="code-actions"><button id="lobby-share" class="menu-button primary" type="button">Share invite</button><button id="lobby-copy-code" class="menu-button" type="button">Copy code</button></div>
       </div>
       <details class="invite-link"><summary>Or send the invite link</summary><div class="share-row"><input id="lobby-link" class="text-input" readonly aria-label="Invite link"><button id="lobby-copy" class="menu-button" type="button">Copy link</button></div></details>
@@ -709,7 +779,7 @@
         <div class="rule touch-only"><b>On a phone or tablet.</b> You are placed at your ball automatically. Drag left or right on the course to aim, tap a club in the tray, then hold the big SWING button for power, let go, and tap it again in the gold zone. ☰ pauses or restarts the hole.</div>
         <div class="rule"><b>1. Get to your ball.</b> Press F to jump straight to it, or walk with WASD (Shift to jog, arrows or right-drag to look around). Press E when you are close.</div>
         <div class="rule"><b>2. Pick and aim.</b> Keys 1 Driver, 2 3-Wood, 3 7-Iron, 4 Wedge, 5 Putter. The yellow Coach pick badge shows the best club for each shot. You start aimed at the flag. Hold A/D, the arrow keys, or move your mouse to adjust (hold Shift for fine aim).</div>
-        <div class="rule"><b>3. Make the swing.</b> Hold the mouse or Space for power, release, then click the gold accuracy zone.</div>
+        <div class="rule"><b>3. Make the swing.</b> Hold the mouse or Space for power, release, then click when the bouncing accuracy marker is in the gold zone. No rush: it keeps bouncing.</div>
         <div class="rule"><b>4. Finish the hole.</b> Play every next shot from where the ball stops. A low score wins. Water and out of bounds add one stroke.</div>
         <div class="rule"><b>Putting tip.</b> Every green has its own hills. When you set up with the Putter, little dots flow downhill: the faster they move, the more the ball will curve. The line only shows the start of your putt, so aim up the hill and let it roll down to the cup.</div>
       </div>

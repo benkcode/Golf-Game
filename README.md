@@ -1,14 +1,14 @@
-# Fairway Friends v30
+# Fairway Friends v33
 
-A cartoon nine-hole golf game you can play solo or against friends on their own computers.
+A cartoon 18-hole golf game (par 72, 6,655 yards) you can play solo or against friends on their own computers and phones.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v30.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v33.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v30 && python3 server.py
+cd ~/Downloads/fairway-friends-v33 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -21,8 +21,8 @@ If Terminal says the address is already in use, an older copy is still running: 
 
 On the sign-in screen, type your name and pick your golfer (boy or girl).
 
-- **Create a room** shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
-- Friends type the code and press **Join room**, or open the invite link.
+- Tap **Play with friends**, then **Start a room**. It shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
+- Friends tap **Play with friends**, type the code and press **Join**, or just open the invite link (it fills the code in for them).
 - When everyone appears in the lobby, the host presses **Start round**.
 - Up to 4 players. Everyone plays the same wind.
 
@@ -32,7 +32,7 @@ Rules in a room:
 - You watch each other's shots live, with a coloured tracer.
 - The leaderboard (top right) shows everyone's score to par. Press **View scorecard** for the full card.
 - After each hole the scorecard shows everyone's scores; anyone can tee off the next hole. On later holes, the lowest score on the last hole tees off first.
-- Lowest total after nine holes wins.
+- Lowest total after 18 holes wins. The scorecard shows the front nine (OUT), back nine (IN) and total, like a real card.
 
 ### Friends on the same Wi-Fi
 
@@ -50,6 +50,25 @@ Render.com has a free plan that can run `server.py` as-is:
 4. Render gives you a link like `https://fairway-friends.onrender.com`. Share it; players create or join rooms there.
 
 Free Render servers go to sleep when nobody is playing, so open the link a minute before your friends do. Rooms are kept in memory, so they reset if the server restarts.
+
+## The course
+
+| Hole | Name | Par | Yards | | Hole | Name | Par | Yards |
+|---|---|---|---|---|---|---|---|---|
+| 1 | Gentle Bend | 4 | 350 | | 10 | Split Decision | 4 | 375 |
+| 2 | Front Door | 4 | 330 | | 11 | Creekside Run | 5 | 545 |
+| 3 | The Big Target | 3 | 140 | | 12 | Quarry Drop | 3 | 175 |
+| 4 | Long Meadow | 5 | 530 | | 13 | The Switchback | 4 | 430 |
+| 5 | Waterline | 4 | 390 | | 14 | Risky Reach | 4 | 315 |
+| 6 | High Green | 3 | 165 | | 15 | Needle's Eye | 3 | 205 |
+| 7 | Corner Risk | 4 | 410 | | 16 | Crescent Lake | 5 | 560 |
+| 8 | Island Window | 4 | 360 | | 17 | Bunker Alley | 4 | 420 |
+| 9 | Summit Finish | 5 | 500 | | 18 | Homeward Bound | 4 | 455 |
+| | **Out** | **36** | **3,175** | | | **In** | **36** | **3,480** |
+
+Card yardages follow the fairway, like a real course. On the bending holes the straight line to the green is shorter, which is what makes the shortcuts pay: carry the pond on 14 and you can drive the green; hug the creek on 11 or the lake on 16 and the green is reachable in two. Water hazards and their banks are always in play (never out of bounds), and a ball in the water is dropped on the nearest dry grass that isn't closer to the hole.
+
+Club distances (pure strike, no wind, carry / total): Driver 260 / 282 yd, 3-Wood 234 / 251, 7-Iron 189 / 204, Wedge 107 / 115.
 
 ## Phones and tablets
 
@@ -74,7 +93,7 @@ The first time you play, hole 1 walks you through every control. Click **? Contr
 - `E`: set up at the ball or step away (a bubble saying **E · Hit the ball** pops up when you're close enough)
 - `A/D` (or slide the mouse): aim; hold `Shift` for fine aim
 - `1` Driver, `2` 3-Wood, `3` 7-Iron, `4` Wedge, `5` Putter. The gold **Coach pick** badge shows the best club
-- Hold `Space` (or the mouse) for power, let go, then press again in the gold zone
+- Hold `Space` (or the mouse) for power, let go, then press again when the bouncing accuracy marker is in the gold zone (it keeps bouncing until you do, no rush)
 - `P`: shot preview on/off. `R`: restart hole (solo only, asks first). `Esc`: pause
 
 When you finish a hole the game cheers you on ("Nice birdie!", "Nice par!", "Good bogey"…) before the scorecard appears.
@@ -83,14 +102,14 @@ Water costs 1 stroke and you drop on dry grass behind the pond. Out of bounds (p
 
 ## Leaderboard and saved scores
 
-Every finished nine-hole round (solo or in a room) is posted to the leaderboard automatically. Open **🏆 Leaderboard** on the main menu:
+Every finished 18-hole round (solo or in a room) is posted to the leaderboard automatically. Open **🏆 Leaderboard** on the main menu:
 
 - **All-time / This week / Today**: each golfer's best round, lowest score first. You're highlighted.
 - **My rounds**: every round you've finished on this device, with your best and your average.
 
 At the end of a round the scorecard shows where you placed ("You're #2 of 57 golfers all-time").
 
-Scores are checked on the server (nine holes, each between 1 stroke and double par; room rounds are recorded by the server itself), and one device can't post rounds seconds apart.
+Scores are checked on the server (all 18 holes, each between 1 stroke and double par; room rounds are recorded by the server itself), and one device can't post rounds seconds apart.
 
 ### Keeping scores on Render (important)
 
@@ -122,7 +141,7 @@ The background tune, "Fairway Stroll", is an original piece written for this gam
 - `index.html`: the menus, on-screen panels and styling
 - `game.js`: the game itself (graphics, physics, golfers, multiplayer, sound)
 - `server.py`: serves the game and runs the multiplayer rooms
-- `course-data.js`: the nine hole layouts, in yards
+- `course-data.js`: the 18 hole layouts, in yards (the server reads the pars from here too)
 - `clubs.js`: the cartoon club models
 - `fonts/`: the handwriting and serif fonts for the yardage-book hole card (free, open-licence fonts, included so they work offline)
 

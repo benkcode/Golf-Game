@@ -8,7 +8,7 @@
     // Feel, physics, world scale, and UI tuning live here. Hole layouts live in course-data.js.
     const CONFIG = {
       units: { metersPerUnit: 1, metersToYards: 1.0936133 },
-      world: { teeZ: 5, groundMarginMeters: 90, backRoughMeters: 40, teeWidthMeters: 5.5, teeDepthMeters: 7, ballDiameterMeters: .15, terrainGridSegments: 48 },
+      world: { teeZ: 5, groundMarginMeters: 90, backRoughMeters: 40, hazardBankMeters: 12, teeWidthMeters: 5.5, teeDepthMeters: 7, ballDiameterMeters: .15, terrainGridSegments: 48 },
       physics: {
         fixedTimeStep: 1 / 120,
         gravity: -9.81,
@@ -53,16 +53,17 @@
         heightBias: 1.8,
         rerollKey: 'g'
       },
+      // club distances were raised 20% with the back nine (18 holes, with par 5s you can reach in two)
       clubs: {
-        Driver: { key: '1', model: 'driver', maxDistanceMeters: 200, maxRollMeters: 24, launchAngleDegrees: 14, backspinRpm: 1800, mishitSidespinRpm: 3200, clubLength: 1.16, headWidth: .28, sandMultiplier: .42, teeOnlySuggestion: true },
-        '3-Wood': { key: '2', model: 'wood3', maxDistanceMeters: 180, maxRollMeters: 18, launchAngleDegrees: 13, backspinRpm: 2200, mishitSidespinRpm: 2800, clubLength: 1.13, headWidth: .26, sandMultiplier: .40 },
-        '7-Iron': { key: '3', model: 'iron7', maxDistanceMeters: 145, maxRollMeters: 10, launchAngleDegrees: 24, backspinRpm: 3000, mishitSidespinRpm: 2400, clubLength: 1.02, headWidth: .22, sandMultiplier: .40 },
-        Wedge: { key: '4', model: 'wedge', maxDistanceMeters: 82, maxRollMeters: 4, launchAngleDegrees: 36, backspinRpm: 4200, mishitSidespinRpm: 1500, clubLength: .88, headWidth: .26, sandMultiplier: .72, sandWedge: true },
+        Driver: { key: '1', model: 'driver', maxDistanceMeters: 240, maxRollMeters: 29, launchAngleDegrees: 14, backspinRpm: 1800, mishitSidespinRpm: 3200, clubLength: 1.16, headWidth: .28, sandMultiplier: .42, teeOnlySuggestion: true },
+        '3-Wood': { key: '2', model: 'wood3', maxDistanceMeters: 216, maxRollMeters: 22, launchAngleDegrees: 13, backspinRpm: 2200, mishitSidespinRpm: 2800, clubLength: 1.13, headWidth: .26, sandMultiplier: .40 },
+        '7-Iron': { key: '3', model: 'iron7', maxDistanceMeters: 174, maxRollMeters: 12, launchAngleDegrees: 24, backspinRpm: 3000, mishitSidespinRpm: 2400, clubLength: 1.02, headWidth: .22, sandMultiplier: .40 },
+        Wedge: { key: '4', model: 'wedge', maxDistanceMeters: 98, maxRollMeters: 5, launchAngleDegrees: 36, backspinRpm: 4200, mishitSidespinRpm: 1500, clubLength: .88, headWidth: .26, sandMultiplier: .72, sandWedge: true },
         Putter: { key: '5', model: 'putter', maxDistanceMeters: 20, maxRollMeters: 20, launchAngleDegrees: 2, backspinRpm: 0, mishitSidespinRpm: 250, clubLength: .72, headWidth: .36, putter: true, sandMultiplier: .3 }
       },
       clubSuggestion: { enabled: true, fringePuttMeters: 15, powerHeadroom: .95 },
       clubModel: { headScale: 2.2, lengthToGround: .96 },
-      swing: { meterSpeed: .92, putterMeterSpeed: .72, accuracySpeed: 1.15, powerMax: 1.15, sweetSpotCenter: .78, sweetSpotWidth: .2, overswingDistanceBonus: .12, overswingAccuracyPenalty: 2.4 },
+      swing: { meterSpeed: .92, putterMeterSpeed: .72, accuracySpeed: .72, powerMax: 1.15, sweetSpotCenter: .78, sweetSpotWidth: .2, overswingDistanceBonus: .12, overswingAccuracyPenalty: 2.4 },
       aim: { stepDegrees: 5, mouseDegreesPerPixel: .06, turnSpeedDegrees: 70, fineTurnSpeedDegrees: 18, autoAimAtPin: true, arrowCurve: .035, putterLineLength: 5, landingCircleRadius: 1.1 },
       shotQuality: { perfectWidthMultiplier: .5, niceWidthMultiplier: 1.4, toppedError: .26, fatError: .36, toppedPowerMultiplier: .32, fatPowerMultiplier: .42, fatLaunchAngleMultiplier: .78, toppedSpinMultiplier: 0, fatSpinMultiplier: .55 },
       character: { look: { polo: 0x3f5fd8, poloDark: 0x27409f, collar: 0xf4f1e6, skin: 0xf0b88a, hair: 0x6b3f24, cap: 0xe8584c, capDark: 0xb83f36, pants: 0xefe9d6, belt: 0x1f2f5c, buckle: 0xf4f1e6, shoe: 0xf7f7f2, sole: 0x223a73, glove: 0xffffff, nose: 0xf08a5b }, stance: { ballForward: .5, ballTowardTarget: .1, handHeight: .97, handReach: .36 }, height: 1.8, bodyColor: 0x4d75ef, skinColor: 0xf0b58f, capColor: 0xff7168, shoeColor: 0xf2f0df, walkSpeed: 4.2, jogSpeed: 8.5, acceleration: 16, deceleration: 20, turnSmoothness: 12, trunkRadius: .45, addressDistance: 2.4, addressOffset: 1.18, allowTeleport: true, teleportKey: 't', goToBallKey: 'f', goToBallFadeSeconds: .22 },
@@ -107,7 +108,7 @@
       tracer: { maxPoints: 420, width: .22, lingerSeconds: 2.2, color: 0xffe066 },
       effects: { maxParticles: 260, maxTrailPoints: 42, trailInterval: .028, particleGravity: 7.2, splashRingCount: 6 },
       onboarding: { tipDuration: 4.3 },
-      storage: { settingsKey: 'fairwayFriends.settings.v1', bestScoreKey: 'fairwayFriends.bestScore.v1', tipsKey: 'fairwayFriends.tips.v1', tutorialKey: 'fairwayFriends.tutorialDone.v1', teleportKey: 'fairwayFriends.teleportTaught.v1', historyKey: 'fairwayFriends.history.v1', deviceKey: 'fairwayFriends.device.v1' },
+      storage: { settingsKey: 'fairwayFriends.settings.v1', bestScoreKey: 'fairwayFriends.bestScore18.v1', tipsKey: 'fairwayFriends.tips.v1', tutorialKey: 'fairwayFriends.tutorialDone.v1', teleportKey: 'fairwayFriends.teleportTaught.v1', historyKey: 'fairwayFriends.history.v1', deviceKey: 'fairwayFriends.device.v1' },
       settingsDefaults: { character: 'boy', sound: true, music: true, musicVolume: .35, cameraSensitivity: 1, trajectoryPreview: true, mouseAim: true, mouseSensitivity: .6, autoClub: true },
       debug: { enabled: false, allowSpinKeys: false, allowLoftKeys: false },
       courseVisuals: { treeTrunkColor: 0x76502e, treeDarkColor: 0x285f3a, treeLightColor: 0x3f8750, fairwayStripeA: 0x91ce72, fairwayStripeB: 0x86c567, roughColor: 0x78b963, greenColor: 0x73bd68, fringeColor: 0x65ae5d, sandColor: 0xe4c47e, waterColor: 0x4caec4, outOfBoundsColor: 0xf8f7e9, markerBlue: 0x3c76d9, markerWhite: 0xf5f3dc, markerRed: 0xe95d58, slopeColor: 0xd8f0b8, flagHeightMeters: 2.5, cupDiameterMeters: .5,
@@ -178,7 +179,7 @@
     const scene = new THREE.Scene();
     scene.background = (() => { const c = document.createElement('canvas'); c.width = 4; c.height = 256; const g = c.getContext('2d'); const grad = g.createLinearGradient(0, 0, 0, 256); grad.addColorStop(0, '#' + CONFIG.scene.skyTopColor.toString(16).padStart(6, '0')); grad.addColorStop(.62, '#' + CONFIG.scene.skyColor.toString(16).padStart(6, '0')); grad.addColorStop(1, '#' + CONFIG.scene.skyColor.toString(16).padStart(6, '0')); g.fillStyle = grad; g.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
     scene.fog = new THREE.Fog(CONFIG.scene.skyColor, CONFIG.camera.fogNear, CONFIG.camera.fogFar);
-    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, .1, CONFIG.camera.farClip);
+    const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, .3, CONFIG.camera.farClip); // near .3 (was .1): 3x finer depth, no shimmer between the grass layers far away
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -430,14 +431,16 @@
 
     function normalizeHole(raw) {
       const path = raw.fairwayPath.map(point => ({ d: yardsToMeters(point.distanceYards), x: yardsToMeters(point.xYards), z: CONFIG.world.teeZ - yardsToMeters(point.distanceYards) }));
-      const greenPoint = worldPointFromYards(raw, raw.green.xYards, raw.lengthYards);
+      const straightYards = raw.greenDistanceYards || raw.lengthYards; // card yardage is measured along the route; this is the straight tee-to-green distance
+      const greenPoint = worldPointFromYards(raw, raw.green.xYards, straightYards);
       const hole = {
         raw,
         number: raw.number,
         name: raw.name,
         par: raw.par,
         lengthYards: raw.lengthYards,
-        lengthMeters: yardsToMeters(raw.lengthYards),
+        greenDistanceYards: straightYards,
+        lengthMeters: yardsToMeters(straightYards),
         fairwayWidthMeters: yardsToMeters(raw.fairwayWidthYards),
         roughWidthMeters: yardsToMeters(raw.roughWidthYards),
         terrain: raw.terrain,
@@ -452,7 +455,7 @@
         const look = CONFIG.courseVisuals.cartoon; const count = Math.max(1, Math.round(cluster.count * look.treeDensity)); const outward = Math.sign(cluster.xYards) || 1;
         for (let i = 0; i < count; i += 1) {
           const along = count === 1 ? .5 : i / (count - 1);
-          const dYards = THREE.MathUtils.clamp(cluster.distanceYards + (along - .5) * cluster.spreadYards, 4, raw.lengthYards + 25);
+          const dYards = THREE.MathUtils.clamp(cluster.distanceYards + (along - .5) * cluster.spreadYards, 4, straightYards + 25);
           const xJitter = (random01(clusterIndex * 100 + i + raw.number) - .5) * Math.min(8, cluster.spreadYards * .08) + (i % 2) * outward * 5;
           const x = yardsToMeters(cluster.xYards + xJitter);
           const z = CONFIG.world.teeZ - yardsToMeters(dYards);
@@ -461,8 +464,9 @@
           hole.trees.push({ x, z, height, radius: height * (pine ? .24 : .3) * .85, baseY: 0, pine, seed: clusterIndex * 131 + i * 17 + raw.number });
         }
       });
-      const maxSide = Math.max(hole.fairwayWidthMeters / 2 + hole.roughWidthMeters + 20, 65);
-      hole.bounds = { minX: -maxSide, maxX: maxSide, minZ: CONFIG.world.teeZ - hole.lengthMeters - CONFIG.world.groundMarginMeters, maxZ: CONFIG.world.teeZ + 28 };
+      const maxSide = Math.max(hole.fairwayWidthMeters / 2 + hole.roughWidthMeters + 20, 65); const side = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters + 20;
+      const pathXs = path.map(p => p.x).concat([greenPoint.x]); // bends and S-curves widen the ground so the whole route sits on the course
+      hole.bounds = { minX: Math.min(-maxSide, Math.min(...pathXs) - side), maxX: Math.max(maxSide, Math.max(...pathXs) + side), minZ: CONFIG.world.teeZ - hole.lengthMeters - CONFIG.world.groundMarginMeters, maxZ: CONFIG.world.teeZ + 28 };
       hole.pins = findPinPositions(hole); hole.pinIndex = pinOfTheDay(hole); hole.pin = hole.pins[hole.pinIndex].position.clone(); hole.pinLabel = hole.pins[hole.pinIndex].label;
       return hole;
     }
@@ -524,7 +528,7 @@
     function normalizeGreenDesign(d = {}) {
       const shape = Object.assign({ stretchX: 1, stretchZ: 1, turn: 0, lobes: [] }, d.shape || {});
       const contours = (d.contours || []).map(c => {
-        if (c.type === 'falseFront') return { type: 'tier', front: true, dx: 0, dz: 1, at: c.at ?? .55, width: c.width ?? .14, height: -(c.drop ?? .3) };
+        if (c.type === 'falseFront') return { type: 'tier', front: true, dx: 0, dz: 1, at: c.at ?? .55, width: (c.width ?? .14) * .6, height: -(c.drop ?? .3) * 1.2 }; // a short, steep face (~20%): weak shots can't stay on it
         if (c.type === 'tier') { const L = Math.hypot(c.dir[0], c.dir[1]) || 1; return { type: 'tier', dx: c.dir[0] / L, dz: c.dir[1] / L, at: c.at ?? 0, width: c.width ?? .14, height: c.height ?? .4 }; }
         if (c.type === 'ridge') return { type: 'ridge', ax: c.from[0], az: c.from[1], bx: c.to[0], bz: c.to[1], width: c.width ?? .2, height: c.height ?? .15 };
         return { type: 'mound', x: c.x ?? 0, z: c.z ?? 0, size: c.size ?? .4, height: c.type === 'bowl' ? -(c.depth ?? .25) : (c.height ?? .25) };
@@ -587,7 +591,7 @@
     }
     // today's pin: the same for everyone in a room, and it moves every day
     function pinOfTheDay(hole) {
-      const text = (typeof mp !== 'undefined' && mp.active && mp.code) ? mp.code : `day${Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000)}`;
+      const text = (typeof mp !== 'undefined' && mp.active && mp.code) ? `${mp.code}-${(mp.state && mp.state.round) || 0}` /* fresh pins every rematch */ : `day${Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000)}`;
       let seed = 7; for (const ch of text) seed = (seed * 31 + ch.charCodeAt(0)) % 100003;
       return Math.floor(random01(seed * .137 + hole.number * 9.73) * hole.pins.length) % hole.pins.length;
     }
@@ -597,6 +601,8 @@
       const fairwayEdge = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters;
       const inCorridor = distance >= -10 && distance <= hole.lengthMeters + 18 && Math.hypot(x - center.x, z - center.z) <= fairwayEdge;
       if (inCorridor) return false;
+      // water hazards (and the banks around them) are in play, so shortcuts across a lake or creek are real options, never out of bounds
+      const bank = CONFIG.world.hazardBankMeters; if (hole.water.some(w => ((x - w.x) / (w.radiusX + bank)) ** 2 + ((z - w.z) / (w.radiusZ + bank)) ** 2 <= 1)) return false;
       // there is playable rough all around the green, so a ball hit long can be played back from where it lies
       const g = hole.green; return Math.hypot(x - g.center.x, z - g.center.z) > greenSafeRadius(hole);
     }
@@ -705,15 +711,15 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
       const ribbon = (width, lift, material, extra) => {
         const s0 = start - extra, s1 = end + extra; const rows = Math.ceil((s1 - s0) / step), cols = 12, half = width / 2;
         groundGrid(rows, cols, (i, j) => {
-          const d = s0 + (i / rows) * (s1 - s0); const c = fairwayCenterAtDistance(d, hole); const n = fairwayCenterAtDistance(d + 1, hole); const back = fairwayCenterAtDistance(d - 1, hole);
-          const dir = new THREE.Vector3(n.x - back.x, 0, n.z - back.z).normalize(); const normal = new THREE.Vector3(-dir.z, 0, dir.x);
+          const d = s0 + (i / rows) * (s1 - s0); const c = fairwayCenterAtDistance(d, hole);
+          const normal = new THREE.Vector3(1, 0, 0); // rows run straight across the hole, so the strip can never fold over itself on a sharp bend (that folding flickered)
           let wFactor = 1; const fromStart = d - s0, toEnd = s1 - d; if (fromStart < half) wFactor = Math.sqrt(Math.max(0, 1 - ((half - fromStart) / half) ** 2)); if (toEnd < half) wFactor = Math.sqrt(Math.max(0, 1 - ((half - toEnd) / half) ** 2));
           const off = (j / cols - .5) * width * wFactor;
           return { x: c.x + normal.x * off, z: c.z + normal.z * off, u: j / cols, v: d / (look.stripeMeters * 2) };
         }, lift, material, true);
       };
       ribbon(hole.fairwayWidthMeters + 6, .03, withHazards(overlayMaterial(cut, 1), hole, 'overlay'), 3);
-      ribbon(hole.fairwayWidthMeters, .05, withHazards(overlayMaterial(stripes, 2), hole, 'overlay'), 0);
+      ribbon(hole.fairwayWidthMeters, .07, withHazards(overlayMaterial(stripes, 2), hole, 'overlay'), 0);
     }
     function makeGreen(hole) {
       const look = CONFIG.courseVisuals.cartoon; const g = hole.green; const cx = g.center.x, cz = g.center.z;
@@ -926,7 +932,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     function makeYardageMarkers(hole) {
       COURSE_DATA.yardageMarkers.forEach((yardage, index) => {
-        if (yardage >= hole.lengthYards) return;
+        if (yardage >= hole.greenDistanceYards) return;
         const distanceMeters = hole.lengthMeters - yardsToMeters(yardage);
         const center = fairwayCenterAtDistance(distanceMeters, hole);
         const next = fairwayCenterAtDistance(Math.min(hole.lengthMeters, distanceMeters + 1), hole);
@@ -1006,8 +1012,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         const along = i * step; const cap = Math.min(1, along / 1.6, (total - along) / 1.6); const taper = Math.sqrt(Math.max(.02, 1 - (1 - cap) ** 2)); // rounded ends
         const off = (j / cols - .5) * width * taper; return { x: pts[i].x - dz / len * off, z: pts[i].z + dx / len * off, u: j / cols, v: along / vScale };
       }, lift, material);
-      const shadowMat = withHazards(overlayMaterial(shadowTex, 2), hole, 'overlay'); shadowMat.transparent = true; shadowMat.depthWrite = false; strip(P.width + 1.1, .045, shadowMat, 1).renderOrder = 1;
-      const pathMat = withHazards(overlayMaterial(tex, 3), hole, 'overlay'); pathMat.transparent = true; pathMat.color.set(0xd6d6d6); strip(P.width, .065, pathMat, P.jointMeters * 4).renderOrder = 2;
+      const shadowMat = withHazards(overlayMaterial(shadowTex, 3), hole, 'overlay'); shadowMat.transparent = true; shadowMat.depthWrite = false; strip(P.width + 1.1, .09, shadowMat, 1).renderOrder = 1;
+      const pathMat = withHazards(overlayMaterial(tex, 4), hole, 'overlay'); pathMat.transparent = true; pathMat.color.set(0xd6d6d6); strip(P.width, .11, pathMat, P.jointMeters * 4).renderOrder = 2;
     }
     function makeTeeArea(hole) {
       const teeY = terrainHeightAt(0, CONFIG.world.teeZ, hole); const side = -(courseRuntime.cartPathSide || 1); const W = CONFIG.world.teeWidthMeters;
@@ -1437,17 +1443,17 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     async function renderBoard(period) {
       boardPeriod = period; document.querySelectorAll('.board-tabs button').forEach(b => b.classList.toggle('on', b.dataset.period === period)); const body = $('board-body'); const note = $('board-note');
       if (period === 'mine') {
-        const h = readHistory(); if (!h.length) { note.textContent = ''; body.innerHTML = '<div class="board-empty">No finished rounds yet. Play all nine holes and your scores show up here.</div>'; return; }
-        const best = Math.min(...h.map(r => r.total)); const avg = h.reduce((a, r) => a + r.total, 0) / h.length;
+        const h = readHistory(); const holesNow = COURSE_DATA.holes.length; const full = h.filter(r => r.holes.length === holesNow); if (!h.length) { note.textContent = ''; body.innerHTML = `<div class="board-empty">No finished rounds yet. Play all ${holesNow} holes and your scores show up here.</div>`; return; }
+        const best = full.length ? Math.min(...full.map(r => r.total)) : null; const avg = full.length ? full.reduce((a, r) => a + r.total, 0) / full.length : null;
         note.textContent = 'Rounds you finished on this device.';
-        body.innerHTML = `<div class="board-stats"><div><small>Rounds</small><b>${h.length}</b></div><div><small>Best</small><b>${best} <span style="font-size:13px">(${formatToPar(best - totalCoursePar())})</span></b></div><div><small>Average</small><b>${avg.toFixed(1)}</b></div></div>` +
-          h.slice(0, 40).map((r, i) => `<div class="board-row"><span class="rk">${h.length - i}</span><span class="nm">${r.mode === 'room' ? 'Room round' : 'Solo round'}<small>${whenText(r.when)} · ${r.holes.join(' ')}</small></span><span class="tp ${tpClass(r.toPar)}">${formatToPar(r.toPar)}</span><span class="tt">${r.total}</span></div>`).join('');
+        body.innerHTML = `<div class="board-stats"><div><small>${holesNow}-hole rounds</small><b>${full.length}</b></div><div><small>Best</small><b>${best === null ? '—' : `${best} <span style="font-size:13px">(${formatToPar(best - totalCoursePar())})</span>`}</b></div><div><small>Average</small><b>${avg === null ? '—' : avg.toFixed(1)}</b></div></div>` +
+          h.slice(0, 40).map((r, i) => { const old = r.holes.length !== holesNow; const half = n => r.holes.slice(n, n + 9).reduce((a, b) => a + b, 0); return `<div class="board-row"><span class="rk">${h.length - i}</span><span class="nm">${r.mode === 'room' ? 'Room round' : 'Solo round'}${old ? ` <em>${r.holes.length} holes</em>` : ''}<small>${whenText(r.when)} · ${r.holes.length > 9 ? `out ${half(0)} · in ${half(9)}` : r.holes.join(' ')}</small></span><span class="tp ${tpClass(r.toPar)}">${formatToPar(r.toPar)}</span><span class="tt">${r.total}</span></div>`; }).join('');
         return;
       }
       note.textContent = 'Loading…'; body.innerHTML = '';
       try {
         const d = await (await fetch(`/api/leaderboard?period=${period}&limit=100&device=${encodeURIComponent(deviceId())}`)).json(); if (boardPeriod !== period) return;
-        if (!d.entries.length) { note.textContent = ''; body.innerHTML = `<div class="board-empty">No rounds ${period === 'today' ? 'today' : period === 'week' ? 'this week' : 'yet'}. Finish all nine holes to get on the board!</div>`; return; }
+        if (!d.entries.length) { note.textContent = ''; body.innerHTML = `<div class="board-empty">No ${COURSE_DATA.holes.length}-hole rounds ${period === 'today' ? 'today' : period === 'week' ? 'this week' : 'yet'}. Finish all ${COURSE_DATA.holes.length} holes to get on the board!</div>`; return; }
         note.textContent = `Each golfer’s best round · ${d.players} golfer${d.players === 1 ? '' : 's'} · ${d.rounds} round${d.rounds === 1 ? '' : 's'} played${d.me && !d.entries.some(e => e.me) ? ` · you’re #${d.me.rank}` : ''}`;
         body.innerHTML = d.entries.map(e => `<div class="board-row${e.me ? ' me' : ''}"><span class="rk${e.rank <= 3 ? ` top r${e.rank}` : ''}">${e.rank}</span><span class="nm">${esc(e.name)}${e.me ? '<em>you</em>' : ''}<small>${whenText(e.when * 1000)} · ${e.mode === 'room' ? 'room' : 'solo'}</small></span><span class="tp ${tpClass(e.toPar)}">${formatToPar(e.toPar)}</span><span class="tt">${e.total}</span></div>`).join('');
       } catch (e) { note.textContent = ''; body.innerHTML = '<div class="board-empty">The leaderboard server couldn’t be reached. Your own scores are under <b>My rounds</b>.</div>'; }
@@ -1456,7 +1462,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function updateBestScoreDisplay() {
       const best = readStoredJSON(CONFIG.storage.bestScoreKey, null); const element = $('best-score');
       if (!best || !Number.isFinite(best.score)) { element.textContent = ''; element.classList.add('empty'); return; } element.classList.remove('empty');
-      element.textContent = `Best score: ${best.score} (${formatToPar(best.score - totalCoursePar())})`;
+      element.textContent = `your best: ${best.score} (${formatToPar(best.score - totalCoursePar())})`;
     }
     function saveBestScore(total) {
       const previous = readStoredJSON(CONFIG.storage.bestScoreKey, null);
@@ -1496,6 +1502,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function resumeGame() { if (gameFlow.mode !== 'paused') return; hideMenuScreens(); document.body.classList.remove('menu-open'); gameFlow.mode = 'playing'; audioEngine.ensure(); }
     function quitToMenu() { clearHeldInputs(); if (mp.active) mpLeave(); else showMainMenu(); }
+    // title screen: "Play with friends" swaps the two big buttons for start-a-room / join-with-a-code
+    function showFriendsStep(on) { $('friends-step').hidden = !on; document.querySelector('.ts-go').hidden = on; $('signin-error').textContent = ''; if (on) ($('join-code').value ? $('join-room') : $('create-room')).focus({ preventScroll: true }); }
     function startNewRound() { const nm = $('player-name').value.trim(); if (nm) { settings.playerName = nm; applySettings(); } audioEngine.ensure(); hideMenuScreens(); document.body.classList.remove('menu-open'); restartRound(true); }
 
     // ---------- first-hole tutorial: each step waits until the player has actually done it ----------
@@ -1871,7 +1879,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     function resetSwingMeter() { swing.phase = 'ready'; swing.value = 0; swing.direction = 1; swing.power = 0; swing.accuracy = 0; swing.holdActive = false; updateSwingMeterUI(); }
     function beginSwingHold() { if (hazardSeq) return; if (!mpMyTurn()) { updateStatus(mpWaitText()); return; } if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active || ballState.holed || holeState.completed) return; audioEngine.ensure(); if (swing.phase === 'accuracy') { completeAccuracyClick(); return; } if (swing.phase !== 'ready') return; swing.phase = 'power'; swing.value = 0; swing.direction = 1; swing.holdActive = true; queueTip('swing', 'Hold the mouse or Space for power. Release, then click the gold accuracy zone.'); updateStatus(currentClub().putter ? 'Hold to pull the putter back' : 'Hold to swing back — release to set power'); updateSwingMeterUI(); }
-    function releaseSwingHold() { if (!swing.holdActive || swing.phase !== 'power') return; swing.holdActive = false; swing.power = THREE.MathUtils.clamp(swing.value, 0, CONFIG.swing.powerMax); swing.phase = 'accuracy'; swing.value = 1; swing.direction = -1; updateStatus('Accuracy marker moving — click to strike'); updateSwingMeterUI(); }
+    function releaseSwingHold() { if (!swing.holdActive || swing.phase !== 'power') return; swing.holdActive = false; swing.power = THREE.MathUtils.clamp(swing.value, 0, CONFIG.swing.powerMax); swing.phase = 'accuracy'; swing.value = 1; swing.direction = -1; updateStatus('Accuracy marker bouncing — strike when it’s in the gold zone'); updateSwingMeterUI(); }
     function completeAccuracyClick() { if (gameFlow.mode !== 'playing' || !addressing || ballState.inFlight || swingAnimation.active || swing.phase !== 'accuracy') return; swing.accuracy = THREE.MathUtils.clamp(swing.value, 0, 1); const shotQuality = shotResultForAccuracy(currentClub(), swing.accuracy); swing.phase = 'swinging'; swing.value = 0; swingAnimation = { active: true, time: 0, power: swing.power, sidespinRpm: shotQuality.sidespinRpm, contactTriggered: false, shotQuality, direction: aimDirection() }; updateStatus(`${shotQuality.label} — downswing to contact`); updateSwingMeterUI(); updateAddressPrompt(); }
     // Where to let go of the power bar to reach the flag (ignores wind and slope, so it's a guide)
     function flagPowerRatio() {
@@ -1886,7 +1894,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         const speed = currentClub().putter ? CONFIG.swing.putterMeterSpeed : CONFIG.swing.meterSpeed;
         if (currentClub().putter) swing.value = Math.min(CONFIG.swing.powerMax, swing.value + speed * dt);
         else { swing.value += swing.direction * speed * dt; if (swing.value >= CONFIG.swing.powerMax) { swing.value = CONFIG.swing.powerMax; swing.direction = -1; } if (swing.value <= 0) { swing.value = 0; swing.direction = 1; } }
-      } else if (swing.phase === 'accuracy') swing.value = Math.max(0, swing.value - CONFIG.swing.accuracySpeed * dt);
+      } else if (swing.phase === 'accuracy') { swing.value += swing.direction * CONFIG.swing.accuracySpeed * dt; if (swing.value <= 0) { swing.value = 0; swing.direction = 1; } if (swing.value >= 1) { swing.value = 1; swing.direction = -1; } } // the accuracy marker bounces until you strike
       updateSwingMeterUI(); const target = flagPowerRatio(); const marker = $('power-target'); if (target === null || swing.phase === 'accuracy') marker.style.display = 'none'; else { marker.style.display = 'block'; marker.style.bottom = `${target * 100}%`; }
     }
     function updateSwingMeterUI() {
@@ -2103,6 +2111,12 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         const x = impact.x + away.x * k, z = impact.z + away.z * k;
         if (dry(x, z) && dry(x + away.x * clear, z + away.z * clear) && dry(x + away.z * 1.2, z - away.x * 1.2) && dry(x - away.z * 1.2, z + away.x * 1.2)) return new THREE.Vector3(x + away.x * clear, 0, z + away.z * clear);
       }
+      // nothing dry straight back (e.g. inside a sweeping dogleg): take the nearest dry, in-bounds grass that is no nearer the hole, so a ball never goes back to the tee
+      const limit = Math.hypot(impact.x - pin.x, impact.z - pin.z) - .5;
+      for (let r = 2; r <= 70; r += 1) for (let a = 0; a < Math.PI * 2; a += Math.PI / 24) {
+        const x = impact.x + Math.cos(a) * r, z = impact.z + Math.sin(a) * r;
+        if (Math.hypot(x - pin.x, z - pin.z) >= limit && dry(x, z) && dry(x + 1.5, z) && dry(x - 1.5, z) && dry(x, z + 1.5) && dry(x, z - 1.5)) return new THREE.Vector3(x, 0, z);
+      }
       return origin.clone();
     }
     function startHazardSequence(type, state) {
@@ -2129,6 +2143,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function checkTreeCollision(previous, current, state, preview) {
       for (const tree of courseRuntime.treeColliders) {
+        if (state.origin && Math.hypot(state.origin.x - tree.x, state.origin.z - tree.z) <= tree.radius + 1.2) continue; // playing out from under this tree: it can't trap the ball
         const base = tree.baseY; const currentHeight = current.y - base; if (currentHeight < .18 || currentHeight > tree.height + .35) continue;
         let hit = false;
         for (let step = 0; step <= 4; step += 1) { const t = step / 4; const x = THREE.MathUtils.lerp(previous.x, current.x, t); const z = THREE.MathUtils.lerp(previous.z, current.z, t); if (Math.hypot(x - tree.x, z - tree.z) <= tree.radius) { hit = true; break; } }
@@ -2165,14 +2180,22 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function toParClass(v) { return v < 0 ? 'under' : v > 0 ? 'over' : 'even'; }
     function playerTotals(scores, pars) { let total = 0, par = 0, thru = 0; scores.forEach((sc, i) => { if (sc !== null && sc !== undefined) { total += sc; par += pars[i]; thru += 1; } }); return { total, toPar: total - par, thru }; }
     // players: [{ name, color, scores }]
+    // a real golf card: Front 9 (OUT) and Back 9 (IN, TOT, +/-) stacked; a nine-hole course keeps the single OUT card
     function golfCardHtml(players, pars, highlight) {
       const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-      let h = '<table class="golf-card"><thead><tr><th>HOLE</th>' + pars.map((_, i) => `<th class="${i === highlight ? 'cur' : ''}">${i + 1}</th>`).join('') + '<th>OUT</th><th>+/−</th></tr></thead><tbody>';
-      h += '<tr class="par"><td class="name">PAR</td>' + pars.map((p, i) => `<td class="${i === highlight ? 'cur' : ''}">${p}</td>`).join('') + `<td class="out">${pars.reduce((a, b) => a + b, 0)}</td><td></td></tr>`;
-      h += '<tr class="par"><td class="name">YARDS</td>' + COURSE_DATA.holes.map((hole, i) => `<td class="${i === highlight ? 'cur' : ''}">${hole.lengthYards}</td>`).join('') + `<td class="out">${COURSE_DATA.holes.reduce((a, b) => a + b.lengthYards, 0)}</td><td></td></tr>`;
-      players.forEach(pl => { const t = playerTotals(pl.scores, pars);
-        h += `<tr><td class="name"><i style="background:${pl.color}"></i>${esc(pl.name)}</td>` + pl.scores.map((sc, i) => `<td class="${i === highlight ? 'cur' : ''}">${scoreMark(sc, pars[i])}</td>`).join('') + `<td class="out tot">${t.thru ? t.total : ''}</td><td class="tot ${toParClass(t.toPar)}">${t.thru ? formatToPar(t.toPar) : ''}</td></tr>`; });
-      return h + '</tbody></table>';
+      const sum = (arr, a, b) => arr.slice(a, b).reduce((x, y) => x + (y || 0), 0);
+      const half = (from, to, label, last) => {
+        const idx = []; for (let i = from; i < to; i++) idx.push(i); const cls = i => (i === highlight ? 'cur' : '');
+        let h = `<table class="golf-card${last ? '' : ' front'}"><thead><tr><th class="side"><span class="lg">${label}</span><span class="sm">${label === 'FRONT' ? 'F9' : label === 'BACK' ? 'B9' : '#'}</span></th>` + idx.map(i => `<th class="${cls(i)}">${i + 1}</th>`).join('') + `<th class="sum">${to <= 9 ? 'OUT' : 'IN'}</th>${last && from > 0 ? '<th class="sum">TOT</th>' : ''}${last ? '<th class="sum">+/−</th>' : ''}</tr></thead><tbody>`;
+        h += '<tr class="par"><td class="name">PAR</td>' + idx.map(i => `<td class="${cls(i)}">${pars[i]}</td>`).join('') + `<td class="out">${sum(pars, from, to)}</td>${last && from > 0 ? `<td class="out">${sum(pars, 0, pars.length)}</td>` : ''}${last ? '<td></td>' : ''}</tr>`;
+        const yd = COURSE_DATA.holes.map(x => x.lengthYards);
+        h += '<tr class="par yds"><td class="name"><span class="lg">YARDS</span><span class="sm">YDS</span></td>' + idx.map(i => `<td class="${cls(i)}">${yd[i]}</td>`).join('') + `<td class="out">${sum(yd, from, to)}</td>${last && from > 0 ? `<td class="out">${sum(yd, 0, yd.length)}</td>` : ''}${last ? '<td></td>' : ''}</tr>`;
+        players.forEach(pl => { const t = playerTotals(pl.scores, pars); const part = pl.scores.slice(from, to); const partPlayed = part.some(v => v !== null && v !== undefined);
+          h += `<tr><td class="name"><i style="background:${pl.color}"></i>${esc(pl.name)}</td>` + idx.map(i => `<td class="${cls(i)}">${scoreMark(pl.scores[i], pars[i])}</td>`).join('') + `<td class="out tot">${partPlayed ? sum(pl.scores, from, to) : ''}</td>${last && from > 0 ? `<td class="out tot">${t.thru ? t.total : ''}</td>` : ''}${last ? `<td class="tot ${toParClass(t.toPar)}">${t.thru ? formatToPar(t.toPar) : ''}</td>` : ''}</tr>`; });
+        return h + '</tbody></table>';
+      };
+      if (pars.length <= 9) return half(0, pars.length, 'HOLE', true);
+      return half(0, 9, 'FRONT', false) + half(9, pars.length, 'BACK', true);
     }
     function renderScorecard() {
       const pars = scorecard.map(r => r.par); const me = { name: playerName(), color: '#4d75ef', scores: scorecard.map(r => r.score) };
@@ -2605,6 +2628,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     $('reset').addEventListener('click', () => { if (gameFlow.mode === 'playing') askRestartHole(); });
     $('how-replay-tutorial').addEventListener('click', () => { writeStoredJSON(CONFIG.storage.tutorialKey, false); $('how-replay-tutorial').textContent = '✓ The tutorial will play on hole 1'; });
     $('tg-go').addEventListener('click', () => completeTeleportLesson());
+    $('open-friends').addEventListener('click', () => showFriendsStep(true)); $('friends-back').addEventListener('click', () => showFriendsStep(false));
     $('create-room').addEventListener('click', () => mpCreateOrJoin(false)); $('join-room').addEventListener('click', () => mpCreateOrJoin(true));
     $('join-code').addEventListener('keydown', e => { if (e.key === 'Enter') mpCreateOrJoin(true); e.stopPropagation(); }); $('player-name').addEventListener('keydown', e => e.stopPropagation());
     $('lobby-start').addEventListener('click', () => mpPost('start', mpAuth()).catch(e => { $('lobby-wait').textContent = e.message; }));
@@ -2711,7 +2735,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     loadInitialState(); requestAnimationFrame(animate);
     // sign-in screen: name, golfer previews, invite links and reconnecting after a refresh
-    $('player-name').value = settings.playerName || ''; setupCharacterPreviews(); selectCharacter(settings.character);
-    (() => { const q = new URLSearchParams(location.search).get('room'); if (q) $('join-code').value = q.toUpperCase().slice(0, 4);
+    $('player-name').value = settings.playerName || ''; $('ts-course').textContent = `${COURSE_DATA.holes.length} holes · par ${totalCoursePar()}`; setupCharacterPreviews(); selectCharacter(settings.character);
+    (() => { const q = new URLSearchParams(location.search).get('room'); if (q) { $('join-code').value = q.toUpperCase().slice(0, 4); showFriendsStep(true); }
       const saved = JSON.parse(sessionStorage.getItem('ff-mp') || 'null'); if (saved && saved.code && (!q || q.toUpperCase() === saved.code)) { Object.assign(mp, { active: true, code: saved.code, token: saved.token, myId: saved.id, started: false, lastHole: -1 }); mpConnect(); } })();
   
