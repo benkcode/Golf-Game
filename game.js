@@ -203,7 +203,7 @@
         },
         scene: { skyColor: 0xcdf0ff, skyTopColor: 0x2ea6ee },
         fx: { jungle: true, palms: true, islandLand: true, surf: true },
-        flowers: [0xff3b5c, 0xff6f91, 0xffa62b, 0xffd23f, 0xffffff, 0xe0529c], rocks: [0x3d3b40, 0x4b484f, 0x2f2d33],
+        flowers: [0xff3b5c, 0xff6f91, 0xffa62b, 0xffd23f, 0xffffff, 0xe0529c], rocks: [0x5d5763, 0x6a6470, 0x4e4955],
         hemi: [0xe2f6ff, 0x2f6b43], sign: { bg: '#0f6d74', border: '#f6d27a', text: '#fff7e3', accent: '#ffd166', post: 0xb8894a, board: 0x8a5a34 },
         bank: [[.62, .55, .40], [.78, .70, .52], [.85, .78, .60]], birds: 0xf2f5f7
       }
@@ -539,22 +539,31 @@
         bunkers: raw.bunkers.map(bunker => ({ x: yardsToMeters(bunker.xYards), z: CONFIG.world.teeZ - yardsToMeters(bunker.distanceYards), radiusX: yardsToMeters(bunker.radiusXYards), radiusZ: yardsToMeters(bunker.radiusZYards) })),
         water: raw.water.map(water => ({ x: yardsToMeters(water.xYards), z: CONFIG.world.teeZ - yardsToMeters(water.distanceYards), radiusX: yardsToMeters(water.radiusXYards), radiusZ: yardsToMeters(water.radiusZYards) })),
         // the sea: huge circles, so a shoreline is nearly straight; cliff coasts drop steeply, the others end in a sandy beach
-        ocean: (raw.ocean || []).map(o => ({ x: yardsToMeters(o.xYards), z: CONFIG.world.teeZ - yardsToMeters(o.distanceYards), R: yardsToMeters(o.radiusYards), cliff: !!o.cliff, beach: o.cliff ? 0 : yardsToMeters(o.beachYards || 12) })),
+        ocean: (raw.ocean || []).map(o => ({ x: yardsToMeters(o.xYards), z: CONFIG.world.teeZ - yardsToMeters(o.distanceYards), R: yardsToMeters(o.radiusYards), cliff: !!o.cliff, beach: o.cliff ? 0 : yardsToMeters(o.beachYards || 12), clear: yardsToMeters(o.clearYards || 0) })), // clear: open grass (no jungle) along the shore, so the sea stays in view
         seaLevel: raw.seaLevelMeters !== undefined ? raw.seaLevelMeters : Math.min(raw.terrain.startElevationMeters || 0, raw.terrain.endElevationMeters || 0) - 3.2,
         windBoost: raw.windBoost || 1,
+        openHorizon: !!raw.openHorizon, // high holes with the sea all round: no tall ridges behind the green
         trees: [],
         tee: new THREE.Vector3(0, 0, CONFIG.world.teeZ)
       };
       raw.treeClusters.forEach((cluster, clusterIndex) => {
         const look = CONFIG.courseVisuals.cartoon; const count = Math.max(1, Math.round(cluster.count * look.treeDensity)); const outward = Math.sign(cluster.xYards) || 1;
+        const loose = !!THEME.fx.palms; // island clusters are scattered loosely instead of standing in a neat line
         for (let i = 0; i < count; i += 1) {
-          const along = count === 1 ? .5 : i / (count - 1);
-          const dYards = THREE.MathUtils.clamp(cluster.distanceYards + (along - .5) * cluster.spreadYards, 4, straightYards + 25);
-          const xJitter = (random01(clusterIndex * 100 + i + raw.number) - .5) * Math.min(8, cluster.spreadYards * .08) + (i % 2) * outward * 5;
-          const x = yardsToMeters(cluster.xYards + xJitter);
-          const z = CONFIG.world.teeZ - yardsToMeters(dYards);
+          const rj = k => random01(clusterIndex * 100 + i * 13 + raw.number * 7 + k * 31.7);
+          const along = count === 1 ? .5 : loose ? (i + .15 + rj(1) * .7) / count : i / (count - 1);
+          let dYards = THREE.MathUtils.clamp(cluster.distanceYards + (along - .5) * cluster.spreadYards + (loose ? (rj(2) - .5) * 5 : 0), 4, straightYards + 25);
+          let xJitter = loose ? (rj(3) - .5) * 13 + outward * rj(4) * 9 : (random01(clusterIndex * 100 + i + raw.number) - .5) * Math.min(8, cluster.spreadYards * .08) + (i % 2) * outward * 5;
+          let x = yardsToMeters(cluster.xYards + xJitter);
+          let z = CONFIG.world.teeZ - yardsToMeters(dYards);
+          if (loose) { // never on the fairway, the green, the tee or in a hazard: otherwise keep it where the layout put it
+            const c = fairwayCenterAtDistance(yardsToMeters(dYards), hole); const lat = x - c.x; const minLat = hole.fairwayWidthMeters / 2 + 3;
+            if (Math.abs(lat) < minLat) x = c.x + (Math.sign(lat) || outward) * (minLat + rj(5) * 2);
+            const inHazard = hole.bunkers.some(b => ((x - b.x) / (b.radiusX + 3)) ** 2 + ((z - b.z) / (b.radiusZ + 3)) ** 2 < 1) || hole.water.some(w => ((x - w.x) / (w.radiusX + 4)) ** 2 + ((z - w.z) / (w.radiusZ + 4)) ** 2 < 1) || hole.ocean.some(o => Math.hypot(x - o.x, z - o.z) < o.R + o.beach + 4);
+            if (inHazard || greenEdgeDistance(x, z, hole) < hole.green.fringeMeters + 5 || Math.hypot(x, z - CONFIG.world.teeZ) < 14) { dYards = THREE.MathUtils.clamp(cluster.distanceYards + (along - .5) * cluster.spreadYards, 4, straightYards + 25); x = yardsToMeters(cluster.xYards + (i % 2) * outward * 5); z = CONFIG.world.teeZ - yardsToMeters(dYards); }
+          }
           const height = THREE.MathUtils.lerp(cluster.heightMin || 6, cluster.heightMax || 10, random01(clusterIndex * 17 + i * 3 + raw.number)) * look.treeScale;
-          const roll = random01(clusterIndex * 31 + i * 7 + raw.number * 3); const palm = cluster.kind === 'palm' || (cluster.kind !== 'canopy' && roll < (look.palmShare || 0)); const pine = !palm && roll < look.pineShare;
+          const roll = random01(clusterIndex * 31 + i * 7 + raw.number * 3); const palm = cluster.kind === 'palm' || (cluster.kind === 'mixed' ? roll < .72 : cluster.kind !== 'canopy' && roll < (look.palmShare || 0)); const pine = !palm && roll < look.pineShare;
           // palms: a slim trunk and a crown of fronds, so the ball only stops if it really hits the tree
           hole.trees.push({ x, z, height: palm ? height * 1.15 : height, radius: palm ? height * .15 : height * (pine ? .24 : .3) * .85, baseY: 0, pine, palm, seed: clusterIndex * 131 + i * 17 + raw.number });
         }
@@ -564,12 +573,22 @@
       hole.bounds = { minX: Math.min(-maxSide, Math.min(...pathXs) - side), maxX: Math.max(maxSide, Math.max(...pathXs) + side), minZ: CONFIG.world.teeZ - hole.lengthMeters - CONFIG.world.groundMarginMeters, maxZ: CONFIG.world.teeZ + 28 };
       hole.ocean.filter(o => !o.cliff).forEach((o, oi) => {
         const nearA = Math.atan2(CONFIG.world.teeZ - hole.lengthMeters / 2 - o.z, 0 - o.x); const span = (hole.lengthMeters + 80) / o.R;
-        for (let a = nearA - span / 2, k = 0; a <= nearA + span / 2; a += 13 / o.R, k += 1) {
-          if (random01(k * 7.3 + oi + raw.number) < .3) continue; const r = o.R + o.beach + 2 + random01(k * 3.1 + raw.number) * 5; const x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r;
+        for (let a = nearA - span / 2, k = 0; a <= nearA + span / 2; a += (8 + random01(k * 2.9 + raw.number) * 13) / o.R, k += 1) { // irregular spacing, some right on the sand
+          if (random01(k * 7.3 + oi + raw.number) < .25) continue; const r = o.R + o.beach * (.35 + random01(k * 1.9 + raw.number) * .5) + random01(k * 3.1 + raw.number) * 9; const x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r;
           const d = CONFIG.world.teeZ - z; if (d < 10 || d > hole.lengthMeters + 35) continue; const c = fairwayCenterAtDistance(THREE.MathUtils.clamp(d, 0, hole.lengthMeters), hole);
           if (Math.hypot(x - c.x, z - c.z) < hole.fairwayWidthMeters / 2 + 6 || greenEdgeDistance(x, z, hole) < hole.green.fringeMeters + 8) continue;
           const h = (9 + random01(k * 5.7 + raw.number) * 5) * look0().treeScale; const toSea = new THREE.Vector2(o.x - x, o.z - z).normalize();
           hole.trees.push({ x, z, height: h, radius: h * .13, baseY: 0, palm: true, lean: { x: toSea.x, z: toSea.y, amount: .35 + random01(k * 9.1) * .25 }, seed: 9000 + oi * 500 + k + raw.number });
+        }
+      });
+      hole.ocean.filter(o => o.cliff).forEach((o, oi) => { // a few palms along the cliff tops, leaning out over the sea
+        const nearA = Math.atan2(CONFIG.world.teeZ - hole.lengthMeters / 2 - o.z, 0 - o.x); const span = Math.min(Math.PI * 1.6, (hole.lengthMeters + 80) / o.R);
+        for (let a = nearA - span / 2, k = 0; a <= nearA + span / 2; a += (15 + random01(k * 2.3 + raw.number) * 14) / o.R, k += 1) {
+          if (random01(k * 5.9 + oi + raw.number) < .35) continue; const r = o.R + 7 + random01(k * 4.1 + raw.number) * 6; const x = o.x + Math.cos(a) * r, z = o.z + Math.sin(a) * r;
+          const d = CONFIG.world.teeZ - z; if (d < 12 || d > hole.lengthMeters + 30) continue; const c = fairwayCenterAtDistance(THREE.MathUtils.clamp(d, 0, hole.lengthMeters), hole);
+          if (Math.hypot(x - c.x, z - c.z) < hole.fairwayWidthMeters / 2 + 7 || greenEdgeDistance(x, z, hole) < hole.green.fringeMeters + 8 || hole.bunkers.some(b => ((x - b.x) / (b.radiusX + 3)) ** 2 + ((z - b.z) / (b.radiusZ + 3)) ** 2 < 1)) continue;
+          const h = (10 + random01(k * 6.7 + raw.number) * 6) * look0().treeScale; const toSea = new THREE.Vector2(o.x - x, o.z - z).normalize();
+          hole.trees.push({ x, z, height: h, radius: h * .13, baseY: 0, palm: true, lean: { x: toSea.x, z: toSea.y, amount: .3 + random01(k * 8.3) * .3 }, seed: 12000 + oi * 500 + k + raw.number });
         }
       });
       hole.pins = findPinPositions(hole); hole.pinIndex = pinOfTheDay(hole); hole.pin = hole.pins[hole.pinIndex].position.clone(); hole.pinLabel = hole.pins[hole.pinIndex].label;
@@ -723,7 +742,7 @@
       const inCorridor = distance >= -10 && distance <= hole.lengthMeters + 18 && Math.hypot(x - center.x, z - center.z) <= fairwayEdge;
       if (inCorridor) return false;
       // water hazards (and the banks around them) are in play, so shortcuts across a lake or creek are real options, never out of bounds
-      const bank = CONFIG.world.hazardBankMeters; if ((hole.ocean || []).some(o => Math.hypot(x - o.x, z - o.z) < o.R + o.beach + bank)) return false;
+      const bank = CONFIG.world.hazardBankMeters; if ((hole.ocean || []).some(o => Math.hypot(x - o.x, z - o.z) < o.R + o.beach + bank + (o.clear || 0))) return false;
       if (hole.water.some(w => ((x - w.x) / (w.radiusX + bank)) ** 2 + ((z - w.z) / (w.radiusZ + bank)) ** 2 <= 1)) return false;
       // there is playable rough all around the green, so a ball hit long can be played back from where it lies
       const g = hole.green; return Math.hypot(x - g.center.x, z - g.center.z) > greenSafeRadius(hole);
@@ -810,21 +829,56 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
       const look = CONFIG.courseVisuals.cartoon; const m = look.terrainMargin;
       const minX = hole.bounds.minX - m, maxX = hole.bounds.maxX + m, minZ = hole.bounds.minZ - m, maxZ = hole.bounds.maxZ + m;
       const cols = Math.ceil((maxX - minX) / look.terrainCellMeters), rows = Math.ceil((maxZ - minZ) / look.terrainCellMeters);
-      const positions = [], colors = [], indices = []; const a = new THREE.Color(look.roughA), b = new THREE.Color(look.roughB), deep = new THREE.Color(look.deepRough), tmp = new THREE.Color(); const sandC = new THREE.Color(look.sand).multiplyScalar(.92), rockC = new THREE.Color(0x5a5560);
+      const positions = [], colors = [], indices = []; const a = new THREE.Color(look.roughA), b = new THREE.Color(look.roughB), deep = new THREE.Color(look.deepRough), tmp = new THREE.Color(); const sandC = new THREE.Color(look.sand).multiplyScalar(.92), rockC = new THREE.Color(0x5a5560), wetC = new THREE.Color(look.sandDark || look.sand).multiplyScalar(.8);
       for (let i = 0; i <= rows; i += 1) {
         const z = maxZ - (i / rows) * (maxZ - minZ);
         for (let j = 0; j <= cols; j += 1) {
           const x = minX + (j / cols) * (maxX - minX); let y = terrainHeightAt(x, z, hole, 'coarse'); if (Math.hypot(x - hole.green.center.x, z - hole.green.center.z) < hole.green.radiusMeters * 1.6 + hole.green.fringeMeters) y -= .35 * smooth01((hole.green.fringeMeters - 1 - greenEdgeDistance(x, z, hole)) / 2); positions.push(x, y, z);
           const patch = .5 + .5 * Math.sin(x * .061 + Math.sin(z * .037) * 2.1) * Math.cos(z * .049 - x * .018);
           tmp.copy(a).lerp(b, patch); if (outOfBoundsAt(x, z, hole)) tmp.lerp(deep, .75);
-          if (hole.ocean && hole.ocean.length) { const sea = oceanReach(x, z, hole); if (sea.o) { if (sea.o.cliff) tmp.lerp(rockC, smooth01((sea.s + 4.5) / 3)); else tmp.lerp(sandC, smooth01((sea.s + sea.o.beach + 1.5) / 2.5)); } } // white-sand beaches, dark lava cliff faces
+          if (hole.ocean && hole.ocean.length) { const sea = oceanReach(x, z, hole); if (sea.o) { if (sea.o.cliff) tmp.lerp(rockC, smooth01((sea.s + 3) / 2)); else tmp.lerp(sandC, smooth01((sea.s + sea.o.beach + 1.5) / 2.5)); } } // white-sand beaches, dark lava cliff faces
           if (THEME.fx.islandLand && y < hole.seaLevel + .9) tmp.lerp(sandC, smooth01((hole.seaLevel + .9 - y) / 1.1)); // the island's own shoreline
+          if (THEME.fx.islandLand && y < hole.seaLevel + .4) tmp.lerp(wetC, smooth01((hole.seaLevel + .4 - y) / .35) * .75); // darker wet sand where the waves wash up
           colors.push(tmp.r, tmp.g, tmp.b);
         }
       }
+      if (THEME.fx.islandLand && !renderer.capabilities.isWebGL2) { // (older browsers only: elsewhere the rock is drawn per pixel, see cliffShading)
+        const H = (i, j) => positions[(Math.min(rows, Math.max(0, i)) * (cols + 1) + Math.min(cols, Math.max(0, j))) * 3 + 1], cw = (maxX - minX) / cols, ch = (maxZ - minZ) / rows;
+        for (let i = 0; i <= rows; i += 1) for (let j = 0; j <= cols; j += 1) { const k = i * (cols + 1) + j, y = positions[k * 3 + 1]; if (y < hole.seaLevel + .6) continue;
+          const g = Math.hypot((H(i, j + 1) - H(i, j - 1)) / (2 * cw), (H(i + 1, j) - H(i - 1, j)) / (2 * ch)); const w = smooth01((g - .75) / .6) * .85; if (w <= 0) continue;
+          colors[k * 3] += (rockC.r - colors[k * 3]) * w; colors[k * 3 + 1] += (rockC.g - colors[k * 3 + 1]) * w; colors[k * 3 + 2] += (rockC.b - colors[k * 3 + 2]) * w; }
+      }
+      courseRuntime.terrainGrid = { minX, maxX, minZ, maxZ, cols, rows, pos: positions }; // the sea uses this to find its shores
       for (let i = 0; i < rows; i += 1) for (let j = 0; j < cols; j += 1) { const p = i * (cols + 1) + j, q = p + 1, r = p + cols + 1, t = r + 1; indices.push(p, q, r, q, t, r); }
       const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); geometry.setIndex(indices); geometry.computeVertexNormals();
-      const mesh = new THREE.Mesh(geometry, withHazards(new THREE.MeshLambertMaterial({ vertexColors: true, color: CONFIG.courseVisuals.cartoon.groundTint, side: THREE.DoubleSide }), hole, 'ground')); mesh.receiveShadow = true; courseGroup.add(mesh);
+      const material = withHazards(new THREE.MeshLambertMaterial({ vertexColors: true, color: CONFIG.courseVisuals.cartoon.groundTint, side: THREE.DoubleSide }), hole, 'ground'); if (THEME.fx.islandLand) cliffShading(material, hole);
+      const mesh = new THREE.Mesh(geometry, material); mesh.receiveShadow = true; courseGroup.add(mesh);
+    }
+    // Island cliffs: wherever the ground is steep it is drawn as bare, faceted volcanic rock in darker and lighter layers, wet and dark at the
+    // waterline. It is decided per pixel from the real slope of each triangle, so a cliff face never picks up the green of the grass on its lip.
+    function cliffShading(material, hole) {
+      const prev = material.onBeforeCompile, key = material.customProgramCacheKey();
+      material.onBeforeCompile = (shader, r) => {
+        prev(shader, r);
+        shader.uniforms.uRockA = { value: new THREE.Color(0x837b88) }; shader.uniforms.uRockB = { value: new THREE.Color(0x5d5765) }; shader.uniforms.uSeaY = { value: hole.seaLevel };
+        shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uRockA; uniform vec3 uRockB; uniform float uSeaY; float cliffW = 0.0;')
+          .replace('#include <color_fragment>', `#include <color_fragment>
+#if __VERSION__ >= 300
+{ vec3 wn = normalize(cross(dFdx(vHazWorld), dFdy(vHazWorld))); float steep = 1.0 - abs(wn.y);
+  cliffW = smoothstep(.3, .46, steep);
+  float h = vHazWorld.y - uSeaY; float layer = fract(h * .17 + sin(vHazWorld.x * .07 + vHazWorld.z * .05) * .45 + sin(vHazWorld.x * .23 - vHazWorld.z * .19) * .12);
+  vec3 rock = mix(uRockB, uRockA, smoothstep(.1, .2, layer) - smoothstep(.62, .7, layer) * .55);
+  rock *= .86 + .14 * sin(wn.x * 23.0 + wn.z * 17.0 + wn.y * 11.0); // every facet its own shade (smooth in the normal, so no shimmering grain)
+  rock = mix(rock * .62, rock, smoothstep(.2, 2.4, h));
+  diffuseColor.rgb = mix(diffuseColor.rgb, rock, cliffW); }
+#endif`)
+          .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
+#if __VERSION__ >= 300
+if (cliffW > 0.0) { vec3 fn = normalize(cross(dFdx(vViewPosition), dFdy(vViewPosition))); normal = normalize(mix(normal, fn, cliffW)); } // crisp rock facets, no smeared light
+#endif`);
+      };
+      material.customProgramCacheKey = () => key + '-cliffs';
+      return material;
     }
     function fairwayEndMeters(hole) { return hole.lengthMeters - hole.green.radiusMeters - hole.green.fringeMeters + 2.5; }
     function makeFairway(hole) {
@@ -916,6 +970,15 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
       const lipMat = overlayMaterial(lipTex, 6); lipMat.transparent = true; lipMat.depthWrite = false;
       const lip = ringGrid(bunker.x, bunker.z, bunker.radiusX, bunker.radiusZ, .94, look.bunkerSurround, .05, lipMat, 12, 128); lip.renderOrder = 2;
     }
+    // shared water shader pieces: value noise, cartoon caustics (the wobbling web of sunlight on a sandy bottom) and sun glints on the ripples
+    function waterGlsl() {
+      return `float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
+          float caustic(vec2 p, float t) { vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0;
+            for (int yy = -1; yy <= 1; yy++) for (int xx = -1; xx <= 1; xx++) { vec2 g = vec2(float(xx), float(yy)); vec2 h = vec2(hash(i + g), hash(i + g + 17.31)); vec2 o = g + .5 + .4 * sin(t + 6.2831 * h) - f; float d = dot(o, o); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; } }
+            return 1.0 - smoothstep(0.0, .16, sqrt(d2) - sqrt(d1)); }
+          float glints(vec2 p, float t) { float a = noise(p * 2.3 + vec2(t * .7, -t * .5)), b = noise(p * 3.1 - vec2(t * .45, t * .8)); return smoothstep(1.02, 1.3, a * b * 1.9); }`;
+    }
     function makeWater(water) {
       const look = CONFIG.courseVisuals.cartoon;
       const material = new THREE.ShaderMaterial({
@@ -923,17 +986,16 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
         uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
           uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(water.x, water.z) }, uRadius: { value: new THREE.Vector2(water.radiusX, water.radiusZ) },
           uDeep: { value: new THREE.Color(look.waterDeep) }, uShallow: { value: new THREE.Color(look.water) }, uFoam: { value: new THREE.Color(look.waterFoam) }, uSky: { value: new THREE.Color(CONFIG.scene.skyColor) },
-          uSunDir: { value: sun.position.clone().normalize() }, uSeed: { value: water.x * .13 + water.z * .07 }
+          uSunDir: { value: sun.position.clone().normalize() }, uSeed: { value: water.x * .13 + water.z * .07 }, uTropic: { value: THEME.fx.palms ? 1 : 0 }, uLagoon: { value: new THREE.Color(0x9af2e2) }
         }]),
         vertexShader: `varying vec3 vWorld;
           #include <fog_pars_vertex>
           void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
           }`,
-        fragmentShader: `uniform float uTime; uniform vec2 uCenter; uniform vec2 uRadius; uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFoam; uniform vec3 uSky; uniform vec3 uSunDir; uniform float uSeed; varying vec3 vWorld;
+        fragmentShader: `uniform float uTime; uniform vec2 uCenter; uniform vec2 uRadius; uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uFoam; uniform vec3 uSky; uniform vec3 uSunDir; uniform float uSeed; uniform float uTropic; uniform vec3 uLagoon; varying vec3 vWorld;
           #include <fog_pars_fragment>
-          float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-          float noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
+          ${waterGlsl()}
           float waves(vec2 p, float t) { return noise(p * .45 + vec2(t * .22, t * .15)) * .6 + noise(p * 1.1 - vec2(t * .31, -t * .19)) * .3 + noise(p * 2.7 + vec2(-t * .4, t * .33)) * .1; }
           void main() {
             vec2 d = (vWorld.xz - uCenter) / uRadius; float e = length(d); float a = atan(d.y, d.x);
@@ -946,6 +1008,11 @@ for (int i = 0; i < ${MAX_HAZARDS}; i++) { if (i >= uHazCount) break; float e = 
             float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0); col = mix(col, uSky, fres * .6);
             float spec = pow(max(dot(n, normalize(uSunDir + V)), 0.0), 90.0); col += vec3(1.0, .97, .9) * spec * .9;
             col *= .94 + h * .12;
+            if (uTropic > .5) { // island lagoon: pale over the sand round the rim, light rippling on the bottom, glints of sun
+              col = mix(col, uLagoon, smoothstep(.7, .97, k) * .75);
+              float c = max(caustic(vWorld.xz * .42 + vec2(t * .05, t * .03), t * 1.1), caustic(vWorld.xz * .27 + 3.7, t * .8) * .8);
+              col += vec3(.85, 1.0, .96) * c * smoothstep(.3, .92, k) * .2; col += vec3(1.0) * glints(vWorld.xz, t) * (.3 + spec * 3.0) * .55;
+            }
             float shore = smoothstep(edge - .09, edge - .015, e); float foam = smoothstep(.45, .7, noise(vWorld.xz * 1.4 + vec2(t * .5, -t * .4)));
             col = mix(col, uFoam, shore * (.35 + .65 * foam) * .75);
             gl_FragColor = vec4(col, 1.0 - smoothstep(edge - .012, edge, e));
@@ -973,43 +1040,56 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       bankMat.customProgramCacheKey = () => 'pond-bank-' + THEME.id;
       const bank = ringGrid(water.x, water.z, water.radiusX, water.radiusZ, .9, 1.45, .05, bankMat, 14, 160); bank.renderOrder = 1;
     }
-    // The sea: turquoise shallows fading to deep blue, rolling lines of surf breaking on the shore, a glint of sun
+    // The sea: pale aqua over the sand at every shore, reefs and rippling light in the shallows, turquoise to deep blue further out,
+    // lines of surf rolling in and washing up the beaches, white water at the foot of the cliffs, whitecaps and glints of sun.
+    // Distance to the shore comes from the baked sea field (buildSeaField) when there is one, else from this sea's own circle.
     function makeOcean(o, hole) {
       const look = CONFIG.courseVisuals.cartoon; const size = o.horizon ? o.R : o.R + 2600;
       const material = new THREE.ShaderMaterial({
-        transparent: true, fog: true, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6,
+        transparent: true, fog: true, polygonOffset: true, polygonOffsetFactor: o.horizon ? -1 : -4, polygonOffsetUnits: o.horizon ? -2 : -8,
         uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-          uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(o.x, o.z) }, uR: { value: o.R }, uCliff: { value: o.cliff ? 1 : 0 },
-          uDeep: { value: new THREE.Color(0x0b6fa6) }, uMid: { value: new THREE.Color(look.waterDeep) }, uShallow: { value: new THREE.Color(look.water) }, uFoam: { value: new THREE.Color(look.waterFoam) }, uSky: { value: new THREE.Color(CONFIG.scene.skyColor) },
-          uSunDir: { value: sun.position.clone().normalize() }
+          uTime: { value: 0 }, uCenter: { value: new THREE.Vector2(o.x, o.z) }, uR: { value: o.R }, uCliff: { value: o.cliff ? 1 : 0 }, uHorizon: { value: o.horizon ? 1 : 0 },
+          uDeep: { value: new THREE.Color(0x0a5f9e) }, uMid: { value: new THREE.Color(look.waterDeep) }, uShallow: { value: new THREE.Color(look.water) }, uLagoon: { value: new THREE.Color(0x9af5e4) }, uReef: { value: new THREE.Color(0x1b8c86) },
+          uFoam: { value: new THREE.Color(look.waterFoam) }, uSky: { value: new THREE.Color(CONFIG.scene.skyColor) }, uSunDir: { value: sun.position.clone().normalize() },
+          uField: { value: null }, uFieldA: { value: new THREE.Vector4() }, uFieldN: { value: new THREE.Vector3(1, 1, 1) }, uHasField: { value: 0 }
         }]),
         vertexShader: `varying vec3 vWorld;
           #include <fog_pars_vertex>
           void main() { vec4 wp = modelMatrix * vec4(position, 1.0); vWorld = wp.xyz; vec4 mvPosition = viewMatrix * wp; gl_Position = projectionMatrix * mvPosition;
           #include <fog_vertex>
           }`,
-        fragmentShader: `uniform float uTime; uniform vec2 uCenter; uniform float uR; uniform float uCliff; uniform vec3 uDeep; uniform vec3 uMid; uniform vec3 uShallow; uniform vec3 uFoam; uniform vec3 uSky; uniform vec3 uSunDir; varying vec3 vWorld;
+        fragmentShader: `uniform float uTime; uniform vec2 uCenter; uniform float uR; uniform float uCliff; uniform float uHorizon; uniform vec3 uDeep; uniform vec3 uMid; uniform vec3 uShallow; uniform vec3 uLagoon; uniform vec3 uReef; uniform vec3 uFoam; uniform vec3 uSky; uniform vec3 uSunDir;
+          uniform sampler2D uField; uniform vec4 uFieldA; uniform vec3 uFieldN; uniform float uHasField; varying vec3 vWorld;
           #include <fog_pars_fragment>
-          float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-          float noise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
+          ${waterGlsl()}
           float waves(vec2 p, float t) { return noise(p * .35 + vec2(t * .25, t * .12)) * .6 + noise(p * .9 - vec2(t * .3, -t * .2)) * .3 + noise(p * 2.3 + vec2(-t * .45, t * .3)) * .1; }
           void main() {
-            vec2 rel = vWorld.xz - uCenter; float along = atan(rel.y, rel.x) * uR; float t = uTime;
+            vec2 P = vWorld.xz, rel = P - uCenter; float along = atan(rel.y, rel.x) * uR; float t = uTime;
             float edge = uR + 1.1 * sin(along * .11) + .6 * sin(along * .37 + 1.3) + .35 * sin(along * .9);
-            float d = edge - length(rel); // metres out from the water's edge
-            if (d < 0.0) discard;
-            vec3 col = mix(uShallow, uMid, smoothstep(4.0, 45.0, d)); col = mix(col, uDeep, smoothstep(45.0, 260.0, d));
-            col = mix(col, uShallow * 1.08 + .05, (1.0 - smoothstep(0.0, 5.0, d)) * (1.0 - uCliff) * .7);
-            float h = waves(vWorld.xz, t); float hx = waves(vWorld.xz + vec2(.1, 0.0), t) - h; float hz = waves(vWorld.xz + vec2(0.0, .1), t) - h;
+            float dc = edge - length(rel); // metres out from this sea's own edge
+            if (uHorizon < .5 && dc < 0.0) discard;
+            float d = uHorizon > .5 ? 600.0 : dc;
+            if (uHasField > .5) { vec2 g = vec2((P.x - uFieldA.x) * uFieldA.z, (uFieldA.y - P.y) * uFieldA.w) + .5; float m = texture2D(uField, g / uFieldN.xy).r * 128.0 - 12.0; vec2 out2 = max(max(-g, g - uFieldN.xy), 0.0); d = min(d, m + length(out2) * uFieldN.z); }
+            d = max(d, 0.0);
+            float shelf = d + uCliff * 12.0 + (noise(P * .022 + 4.1) - .5) * 16.0 + (noise(P * .07) - .5) * 5.0; // uneven shelves and sand bars
+            vec3 col = mix(uLagoon, uShallow, smoothstep(.5, 10.0, shelf)); col = mix(col, uMid, smoothstep(16.0, 60.0, shelf)); col = mix(col, uDeep, smoothstep(60.0, 220.0, shelf));
+            float reef = smoothstep(.6, .68, noise(P * .085 + 3.1)) * smoothstep(4.0, 9.0, shelf) * (1.0 - smoothstep(22.0, 48.0, shelf)); col = mix(col, uReef, reef * .5);
+            float shallow = (1.0 - smoothstep(3.0, 28.0, shelf)) * (1.0 - uCliff * .6);
+            if (shallow > .01) { float c = max(caustic(P * .36 + vec2(t * .06, t * .03), t * 1.1), caustic(P * .23 - vec2(t * .03, -t * .05) + 5.3, t * .8) * .8); col += vec3(.85, 1.0, .96) * c * shallow * .2; }
+            float h = waves(P, t); float hx = waves(P + vec2(.1, 0.0), t) - h; float hz = waves(P + vec2(0.0, .1), t) - h;
             vec3 n = normalize(vec3(-hx * 4.0, 1.0, -hz * 4.0)); vec3 V = normalize(cameraPosition - vWorld);
-            float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0); col = mix(col, uSky, fres * .55);
+            float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0); col = mix(col, uSky, fres * .5);
             float spec = pow(max(dot(n, normalize(uSunDir + V)), 0.0), 120.0); col += vec3(1.0, .97, .9) * spec * 1.1;
             col *= .95 + h * .1;
-            // surf: lines of white water rolling in toward the beach, breaking harder against cliffs
-            float n2 = noise(vec2(along * .08, t * .2)) * 2.0; float roll = sin(d * .55 + t * 1.7 + n2);
-            float band = smoothstep(.72, .98, roll) * (1.0 - smoothstep(2.0, 16.0, d)) * (.55 + .45 * noise(vec2(along * .3, d * .4 - t)));
-            float lap = 1.0 - smoothstep(0.0, mix(1.6, 3.2, uCliff), d + .5 * sin(t * 1.3 + along * .05));
-            float foam = max(band * mix(.85, .6, uCliff), lap * mix(.85, 1.0, uCliff)) * smoothstep(.35, .65, noise(vWorld.xz * 1.2 + vec2(t * .6, -t * .4)) * .6 + .45);
+            float near = 1.0 - smoothstep(60.0, 420.0, length(cameraPosition - vWorld));
+            col += vec3(1.0) * glints(P, t) * (.3 + spec * 4.0) * near * .6;
+            float wc = noise(P * vec2(.55, 1.6) + vec2(t * .35, -t * .2)) * noise(P * .13 + vec2(-t * .04, t * .03)); col = mix(col, uFoam, smoothstep(.46, .54, wc) * smoothstep(30.0, 70.0, shelf) * near * .55); // little whitecaps
+            // surf: lines of white water rolling in to every shore (harder against the cliffs), and the wash running up and down the sand
+            float roll = sin(d * .55 + t * 1.7 + noise(P * .04 + vec2(t * .05, 0.0)) * 5.0);
+            float band = smoothstep(.8, .95, roll) * (1.0 - smoothstep(2.0, 18.0, d)) * (.5 + .5 * noise(P * .35 + vec2(0.0, -t)));
+            float lap = 1.0 - smoothstep(0.0, mix(1.3, 3.2, uCliff), d);
+            float wash = 1.7 + 1.3 * sin(t * .9 + noise(P * .08) * 6.0); float swash = (1.0 - smoothstep(0.0, .55, abs(d - wash))) * (1.0 - uCliff) * .8;
+            float foam = max(max(band * mix(.85, .6, uCliff), lap * mix(.9, 1.0, uCliff)), swash) * smoothstep(.35, .65, noise(P * 1.2 + vec2(t * .6, -t * .4)) * .6 + .45);
             col = mix(col, uFoam, clamp(foam, 0.0, 1.0));
             gl_FragColor = vec4(col, 1.0);
             #include <tonemapping_fragment>
@@ -1019,36 +1099,127 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       });
       const mesh = new THREE.Mesh(new THREE.CircleGeometry(1, 360), material);
       mesh.rotation.x = -Math.PI / 2; mesh.position.set(o.x, hole.seaLevel - (o.horizon ? .3 : 0), o.z); mesh.scale.set(size, size, 1); mesh.renderOrder = o.horizon ? 1 : 2; courseGroup.add(mesh);
-      courseRuntime.waterMaterials.push(material); if (o.horizon) return;
-      // dark lava boulders along cliff coasts, and a few sea stacks standing offshore
-      const rocks = []; const nearA = Math.atan2(CONFIG.world.teeZ - hole.lengthMeters / 2 - o.z, 0 - o.x); const span = (hole.lengthMeters + 160) / o.R; let k = 0;
-      for (let a = nearA - span / 2; a <= nearA + span / 2; a += (o.cliff ? 2.6 : 9) / o.R, k += 1) {
-        const r0 = o.cliff ? o.R - 1.5 + random01(k * 3.3) * 3.5 : o.R + 2 + random01(k * 3.3) * 4; const x = o.x + Math.cos(a) * r0, z = o.z + Math.sin(a) * r0;
-        if (!o.cliff && random01(k * 1.7) < .55) continue; const size0 = o.cliff ? 1.2 + random01(k * 5.1) * 2.4 : .5 + random01(k * 5.1) * .9; const y = Math.max(terrainHeightAt(x, z, hole), hole.seaLevel - .6);
-        rocks.push({ x, z, y: y + size0 * .15, sx: size0 * 1.3, sy: size0 * (o.cliff ? 1.1 : .6), sz: size0, ry: random01(k) * 3, color: THEME.rocks[k % THEME.rocks.length] });
-        if (o.cliff && random01(k * 7.7) < .35) rocks.push({ x: x - Math.cos(a) * 2, z: z - Math.sin(a) * 2, y: y - 1.2, sx: size0 * .9, sy: size0 * .9, sz: size0 * .9, ry: random01(k * 2) * 3, color: THEME.rocks[(k + 1) % THEME.rocks.length] });
+      courseRuntime.waterMaterials.push(material); (courseRuntime.oceanMaterials || (courseRuntime.oceanMaterials = [])).push(material); if (o.horizon) return;
+      // rocks: boulders heaped in the surf at the foot of the cliffs (never stuck on the face), a few along the beaches, and sea stacks offshore
+      const rocks = [], foam = [], stackPalms = [], sea = hole.seaLevel, big = o.R > 400;
+      const nearA = Math.atan2(CONFIG.world.teeZ - hole.lengthMeters / 2 - o.z, 0 - o.x); const span = Math.min(Math.PI * 2, (hole.lengthMeters + 200) / o.R);
+      for (let a = nearA - span / 2, k = 0; a <= nearA + span / 2; k += 1) {
+        a += (o.cliff ? 4 + random01(k * 2.7 + hole.number) * 9 : 10 + random01(k * 2.7 + hole.number) * 16) / o.R;
+        if (random01(k * 1.7 + hole.number) < (o.cliff ? .3 : .62)) continue;
+        const n = o.cliff ? 1 + Math.floor(random01(k * 3.9 + hole.number) * 3) : 1;
+        for (let j = 0; j < n; j += 1) {
+          const size = j ? .5 + random01(k * 5.1 + j) * .8 : o.cliff ? 1.1 + random01(k * 5.1) * 2.3 : .45 + random01(k * 5.1) * .6;
+          const r0 = o.cliff ? o.R - .5 - random01(k * 3.3 + j) * 3.4 : o.R - .6 + random01(k * 3.3) * 2.6; const aj = a + (j ? (random01(k * 6.1 + j) - .5) * 3.5 / o.R : 0);
+          const x = o.x + Math.cos(aj) * r0, z = o.z + Math.sin(aj) * r0; const y = o.cliff ? sea - size * .22 : Math.max(terrainHeightAt(x, z, hole), sea - .3) + size * .1;
+          rocks.push({ geo: rockGeometry('boulder', (k + j) % 4), x, y, z, sx: size * (1.1 + random01(k + j * 9) * .5), sy: size * (.8 + random01(k * 2 + j) * .5), sz: size, ry: random01(k * 4 + j) * 6.28, rx: (random01(k * 8 + j) - .5) * .3, tint: .88 + random01(k * 9.9 + j) * .2 });
+          if (o.cliff && size > 1.3) foam.push({ x, z, r: size * 1.25, ry: random01(k + j * 3) * 6.28 });
+        }
       }
-      for (let i = 0; i < (o.cliff ? 7 : 3); i += 1) { const a = nearA + (random01(i * 13.1 + hole.number) - .5) * span; const r0 = o.R > 400 ? o.R - 25 - random01(i * 3.7) * 90 : o.R * (.3 + random01(i * 3.7) * .45); const x = o.x + Math.cos(a) * r0, z = o.z + Math.sin(a) * r0; const hgt = 5 + random01(i * 2.9) * 9; const w = 3 + random01(i * 4.4) * 4;
-        rocks.push({ x, z, y: hole.seaLevel + hgt * .35, sx: w, sy: hgt, sz: w * .9, ry: random01(i) * 3, color: THEME.rocks[i % THEME.rocks.length] }); }
-      detailInstanced(new THREE.DodecahedronGeometry(1, 0), rocks, 0x3d3b40, true);
+      // sea stacks: layered rock towers with a grassy top (now and then a lone palm) and foam round the foot
+      const stacks = o.cliff ? (big ? 5 : 2) : 2;
+      for (let i = 0; i < stacks; i += 1) {
+        let x, z;
+        if (big) { const a = nearA + (random01(i * 13.1 + hole.number) - .5) * span * .8, r0 = o.R - 24 - random01(i * 3.7 + hole.number) * 90; x = o.x + Math.cos(a) * r0; z = o.z + Math.sin(a) * r0; }
+        else { const away = Math.atan2(o.z - (CONFIG.world.teeZ - hole.lengthMeters / 2), o.x), a = away + (random01(i * 13.1 + hole.number) - .5) * 1.5, r0 = o.R * (.55 + random01(i * 3.7 + hole.number) * .3); x = o.x + Math.cos(a) * r0; z = o.z + Math.sin(a) * r0; } // coves: out on the far side, away from the line of play
+        if (!surfaceInfoAt(x, z).ocean) continue;
+        const hgt = o.cliff ? 7 + random01(i * 2.9 + hole.number) * 11 : 4 + random01(i * 2.9 + hole.number) * 5, w = 2.4 + random01(i * 4.4 + hole.number) * 2.6 + hgt * .08, base = sea - 1.5;
+        rocks.push({ geo: rockGeometry('stack', i % 3), x, y: base + (hgt + 1.5) / 2, z, sx: w, sy: hgt + 1.5, sz: w * (.8 + random01(i * 6.6) * .3), ry: random01(i * 7.1 + hole.number) * 6.28, rx: 0, tint: .9 + random01(i * 3.3) * .14 });
+        foam.push({ x, z, r: w * 1.05, ry: random01(i * 5.5) * 6.28 });
+        if (random01(i * 9.7 + hole.number) < .45) stackPalms.push({ x: x + (random01(i + hole.number) - .5) * w * .3, z: z + (random01(i + 3 + hole.number) - .5) * w * .3, baseY: sea + hgt + .15, height: 5 + random01(i * 8.8) * 3, seed: 15000 + i * 7 + hole.number * 31, decor: true });
+      }
+      rockInstanced(rocks); foamPatches(foam, sea); makePalmInstances(stackPalms);
+    }
+    // ---------- sea rocks: chunky, faceted cartoon boulders and layered sea stacks, drawn with instancing and a dark outline ----------
+    const rockGeos = {}; let foamTex = null;
+    function rockHash(x, y, z, s) { return random01(Math.round(x * 97) * 1.31 + Math.round(y * 89) * 2.17 + Math.round(z * 83) * 3.07 + s * 5.3); }
+    function rockGeometry(kind, variant) {
+      const key = kind + variant; if (rockGeos[key]) return rockGeos[key];
+      const C = hex => new THREE.Color(hex); const light = C(0x7d7581), mid = C(0x635c69), dark = C(0x4d4854), wet = C(0x38343e), grass = C(0x5c9b43), grass2 = C(0x4b8838);
+      let g;
+      if (kind === 'stack') { // a tapering tower with ledges (every other band sticks out), slightly twisted, domed on top
+        g = new THREE.CylinderGeometry(.6, 1, 1, 7, 6); const p = g.attributes.position;
+        for (let i = 0; i < p.count; i += 1) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), ring = Math.round((y + .5) * 6), r = Math.hypot(x, z);
+          if (r > 1e-4) { const k = (ring % 2 ? .9 : 1.06) * (.86 + rockHash(x, y, z, variant) * .28), a = Math.atan2(z, x) + ring * .05 * (variant % 2 ? 1 : -1); p.setXYZ(i, Math.cos(a) * r * k, y, Math.sin(a) * r * k); }
+          else if (y > 0) p.setY(i, y + .05); }
+        g = g.toNonIndexed(); g.computeVertexNormals();
+      } else { // a lumpy boulder with a flat underside
+        g = new THREE.IcosahedronGeometry(1, 1); const p = g.attributes.position;
+        for (let i = 0; i < p.count; i += 1) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = .78 + rockHash(x, y, z, variant) * .42; let ny = y * k * .74; if (ny < -.3) ny = -.3 - (ny + .3) * .15; p.setXYZ(i, x * k, ny, z * k); }
+        if (g.index) g = g.toNonIndexed(); g.computeVertexNormals();
+      }
+      const P = g.attributes.position, N = g.attributes.normal, col = [], c = new THREE.Color();
+      for (let i = 0; i < P.count; i += 3) { // one colour per facet
+        const y = (P.getY(i) + P.getY(i + 1) + P.getY(i + 2)) / 3, ny = (N.getY(i) + N.getY(i + 1) + N.getY(i + 2)) / 3, v = rockHash(y * 3.1, ny * 2.3, i * .01, variant);
+        if (kind === 'stack' && ny > .55 && y > .42) c.copy(v > .5 ? grass : grass2);
+        else if (kind === 'stack') c.copy(Math.floor((y + .5) * 6) % 2 ? dark : mid).lerp(light, ny > .3 ? .5 : v * .25).lerp(wet, y < -.3 ? .7 : 0);
+        else c.copy(ny > .5 ? light : ny > -.1 ? mid : dark).lerp(dark, v * .3).lerp(wet, y < -.12 ? .6 : 0);
+        for (let k = 0; k < 3; k += 1) col.push(c.r, c.g, c.b);
+      }
+      g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.userData.shared = true; rockGeos[key] = g; return g;
+    }
+    function rockInstanced(items) {
+      if (!items.length) return; const groups = new Map(); items.forEach(it => { if (!groups.has(it.geo)) groups.set(it.geo, []); groups.get(it.geo).push(it); });
+      const mat = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toonGradient() }), outlineMat = new THREE.MeshBasicMaterial({ color: 0x1d1b22, side: THREE.BackSide });
+      const d = new THREE.Object3D(), col = new THREE.Color();
+      groups.forEach((list, geo) => {
+        const mesh = new THREE.InstancedMesh(geo, mat, list.length), outline = new THREE.InstancedMesh(geo, outlineMat, list.length);
+        list.forEach((it, i) => { d.position.set(it.x, it.y, it.z); d.rotation.set(it.rx || 0, it.ry || 0, 0); d.scale.set(it.sx, it.sy, it.sz); d.updateMatrix(); mesh.setMatrixAt(i, d.matrix); mesh.setColorAt(i, col.setRGB(it.tint, it.tint, it.tint));
+          d.scale.set(it.sx + .14, it.sy + .14, it.sz + .14); d.updateMatrix(); outline.setMatrixAt(i, d.matrix); }); // an even outline, however big the rock
+        mesh.receiveShadow = true; courseGroup.add(mesh); courseGroup.add(outline);
+      });
+    }
+    // white water round the foot of the rocks: a soft, broken ring of foam on the sea
+    function foamTexture() {
+      if (foamTex) return foamTex; const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+      for (let i = 0; i < 320; i += 1) { const a = random01(i * 3.1) * Math.PI * 2, r = 26 + Math.pow(random01(i * 5.7), 1.7) * 34, s = 2 + random01(i * 7.3) * 6 * (1 - (r - 26) / 40); g.fillStyle = `rgba(255,255,255,${(.3 + random01(i * 2.2) * .6) * (1 - (r - 26) / 44)})`; g.beginPath(); g.arc(64 + Math.cos(a) * r, 64 + Math.sin(a) * r, s, 0, Math.PI * 2); g.fill(); }
+      foamTex = new THREE.CanvasTexture(c); foamTex.colorSpace = THREE.SRGBColorSpace; foamTex.userData.shared = true; return foamTex;
+    }
+    function foamPatches(list, sea) {
+      if (!list.length) return; const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshBasicMaterial({ map: foamTexture(), transparent: true, depthWrite: false, opacity: .9, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -16 });
+      const mesh = new THREE.InstancedMesh(geo, mat, list.length), d = new THREE.Object3D();
+      list.forEach((f, i) => { d.position.set(f.x, sea + .05, f.z); d.rotation.set(0, f.ry, 0); const sc = f.r * 4.4; d.scale.set(sc, 1, sc); d.updateMatrix(); mesh.setMatrixAt(i, d.matrix); });
+      mesh.renderOrder = 3; courseGroup.add(mesh);
     }
     // Chunky cartoon trees (round oaks and stacked pines) drawn with instancing, with dark outlines
     function makeForest(hole) {
       const look = CONFIG.courseVisuals.cartoon; const trees = [];
       hole.trees.forEach(tree => { tree.baseY = terrainHeightAt(tree.x, tree.z); trees.push(tree); courseRuntime.treeColliders.push(tree); });
-      // decorative forest outside the white stakes (no collision needed: that's out of bounds)
+      // decorative forest outside the white stakes (no collision needed: that's out of bounds). Trees are scattered at random through the band
+      // (one per jittered cell, with gaps and the odd clump) and kept a little apart, so they never line up in rows
       const edge = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters;
-      let seed = hole.number * 1000;
-      const decor = (x, z) => { seed += 1; if (!outOfBoundsAt(x, z, hole)) return; const baseY = terrainHeightAt(x, z); if (THEME.fx.islandLand && baseY < hole.seaLevel + .4) return; // no trees in the sea
-        if (THEME.fx.palms) { const r = random01(seed * 2.7); const h = (r < .4 ? 11 + random01(seed * 1.3) * 7 : 10 + random01(seed * 1.3) * 9) * look.treeScale; const a = random01(seed * 4.9) * Math.PI * 2;
-          trees.push({ x, z, baseY, height: h, palm: r < .4, umbrella: r >= .4 && r < .55, lean: { x: Math.cos(a), z: Math.sin(a), amount: .08 + random01(seed * 6.1) * .3 }, seed, decor: true }); return; }
+      let seed = hole.number * 1000; const island = !!THEME.fx.palms;
+      const spots = new Map(); const cellOf = (x, z) => Math.floor(x / 4) * 100003 + Math.floor(z / 4);
+      const roomFor = (x, z, r) => { const i = Math.floor(x / 4), j = Math.floor(z / 4); for (let a = i - 1; a <= i + 1; a += 1) for (let b = j - 1; b <= j + 1; b += 1) { const L = spots.get(a * 100003 + b); if (L) for (const q of L) if ((q[0] - x) ** 2 + (q[1] - z) ** 2 < r * r) return false; } return true; };
+      const mark = (x, z) => { const k = cellOf(x, z); const L = spots.get(k); if (L) L.push([x, z]); else spots.set(k, [[x, z]]); };
+      trees.forEach(t => mark(t.x, t.z));
+      const decor = (x, z, front = false, leanTo = null) => { seed += 1; if (!outOfBoundsAt(x, z, hole) || !roomFor(x, z, island ? 2.7 : 3.4) || (island && steepAt(x, z, hole) > .6)) return; const baseY = terrainHeightAt(x, z); if (THEME.fx.islandLand && baseY < hole.seaLevel + .4) return; // no trees in the sea
+        mark(x, z);
+        if (island) { // palms nearly everywhere, with a few broad rain trees and jungle canopy for depth; small palms crowd the jungle edge
+          const r = random01(seed * 2.7), palm = r < .8, short = palm && random01(seed * 8.1) < (front ? .4 : .12);
+          const h = (palm ? (short ? 3.2 + random01(seed * 1.3) * 2.6 : 10 + random01(seed * 1.3) * 9.5) : 10 + random01(seed * 1.3) * 8) * look.treeScale;
+          const toward = leanTo && random01(seed * 5.7) < .65; const ang = toward ? Math.atan2(leanTo.z, leanTo.x) + (random01(seed * 6.6) - .5) * 1.5 : random01(seed * 4.9) * Math.PI * 2; // edge palms lean out toward the light
+          trees.push({ x, z, baseY, height: h, palm, short, umbrella: !palm && r < .9, lean: { x: Math.cos(ang), z: Math.sin(ang), amount: (short ? .04 : .07) + random01(seed * 6.1) * (toward ? .4 : .26) }, seed, decor: true });
+          if (palm && !short && random01(seed * 3.9) < .22) { // now and then two or three palms grow from one spot, leaning apart
+            const n = random01(seed * 4.4) < .3 ? 2 : 1;
+            for (let k = 0; k < n; k += 1) { const b = ang + Math.PI * (k ? .72 : -.78) + (random01(seed * 7.7 + k) - .5) * .5; const px = x + Math.cos(b) * 1.4, pz = z + Math.sin(b) * 1.4; if (!outOfBoundsAt(px, pz, hole)) continue; seed += 1;
+              trees.push({ x: px, z: pz, baseY: terrainHeightAt(px, pz), height: h * (.68 + random01(seed * 2.1) * .27), palm: true, lean: { x: Math.cos(b), z: Math.sin(b), amount: .24 + random01(seed * 3.1) * .26 }, seed, decor: true }); mark(px, pz); }
+          }
+          return;
+        }
         const h = (8 + random01(seed * 1.3) * 7) * look.treeScale; trees.push({ x, z, baseY, height: h, pine: random01(seed * 2.7) < look.pineShare + .08, seed, decor: true }); };
-      for (let d = -18; d < hole.lengthMeters + 40; d += look.decorSpacing) {
-        const c = fairwayCenterAtDistance(d, hole);
-        [-1, 1].forEach(side => { for (let row = 0; row < look.decorRows; row += 1) { if (row >= 3 && random01(seed * 3.3 + row) < .35) continue; const off = edge + 5 + row * (row >= 3 ? 8.5 : 7) + random01(seed * 5.1 + row) * 3.5; const dz = (random01(seed * 9.3 + row) - .5) * 4; decor(c.x + side * off, c.z - dz); } });
+      const band = look.decorRows * 7.5, across = band / 4.6, step = look.decorSpacing;
+      for (let d = -24; d < hole.lengthMeters + 46; d += step) {
+        const cd = THREE.MathUtils.clamp(d, 0, hole.lengthMeters), a0 = Math.max(0, Math.min(cd, hole.lengthMeters - 2)); const p0 = fairwayCenterAtDistance(a0, hole), p1 = fairwayCenterAtDistance(a0 + 2, hole);
+        let tx = p1.x - p0.x, tz = p1.z - p0.z; const L = Math.hypot(tx, tz); if (L > .01) { tx /= L; tz /= L; } else { tx = 0; tz = -1; }
+        const c = fairwayCenterAtDistance(cd, hole); c.x += tx * (d - cd); c.z += tz * (d - cd); // carry on straight past the tee and the green
+        [-1, 1].forEach(side => { const nx = -tz * side, nz = tx * side; // pointing away from the fairway on this side
+          for (let o = 0; o < band - .01; o += across) { seed += 1; if (random01(seed * 3.3) < .1) continue;
+            const off = edge + 3 + o + random01(seed * 5.1) * across, along = (random01(seed * 9.3) - .5) * step;
+            decor(c.x + nx * off + tx * along, c.z + nz * off + tz * along, o === 0, { x: -nx, z: -nz }); } });
       }
-      const g = hole.green.center; for (let a = -2.1; a <= 2.1; a += .11) for (let row = 0; row < 3; row += 1) { const r = greenSafeRadius(hole) + 4 + row * 7; decor(g.x + Math.sin(a) * r, g.z - Math.cos(a) * r); }
-      for (let x = -edge - 20; x <= edge + 20; x += 7) for (let row = 0; row < 2; row += 1) decor(x + random01(seed) * 3, CONFIG.world.teeZ + 20 + row * 7);
+      const g = hole.green.center; for (let a = -2.1; a <= 2.1; a += .13) for (let row = 0; row < 3; row += 1) { seed += 1; const r = greenSafeRadius(hole) + 4 + row * 7 + random01(seed * 2.2) * 6, aa = a + (random01(seed * 3.4) - .5) * .12; decor(g.x + Math.sin(aa) * r, g.z - Math.cos(aa) * r, row === 0, { x: -Math.sin(aa), z: Math.cos(aa) }); }
+      for (let x = -edge - 20; x <= edge + 20; x += 7) for (let row = 0; row < 2; row += 1) { seed += 1; decor(x + (random01(seed * 1.9) - .5) * 6, CONFIG.world.teeZ + 20 + row * 7 + random01(seed * 2.9) * 5); }
 
       const oak = [], pine = [], palms = [];
       trees.forEach(t => (t.palm ? palms : t.pine ? pine : oak).push(t));
@@ -1056,27 +1227,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       const toon = color => new THREE.MeshToonMaterial({ color, gradientMap: toonGradient() });
       const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient() });
       const outlineMat = new THREE.MeshBasicMaterial({ color: look.outline, side: THREE.BackSide });
-      const parts = { trunk: [], blob: [], cone: [], palmTrunk: [], frond: [], nut: [] }; let currentDecor = false;
+      const parts = { trunk: [], blob: [], cone: [] }; let currentDecor = false;
       const add = (list, x, y, z, sx, sy, sz, color, ry = 0, q = null) => list.push({ x, y, z, sx, sy, sz, color, ry, q, decor: currentDecor });
-      // palms: a gently curving ringed trunk, a crown of drooping fronds and a few coconuts
-      const up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), qTmp = new THREE.Quaternion(), qYaw = new THREE.Quaternion(), qPitch = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0);
-      palms.forEach(t => {
-        currentDecor = !!t.decor; const h = t.height, rnd = k => random01(t.seed * 5.3 + k); const lean = t.lean || { x: Math.cos(rnd(1) * 6.28), z: Math.sin(rnd(1) * 6.28), amount: .06 + rnd(2) * .22 };
-        const n = 6, seg = h * .86 / n; const p = new THREE.Vector3(t.x, t.baseY - .2, t.z);
-        for (let i = 0; i < n; i += 1) {
-          const th = lean.amount * Math.pow((i + .5) / n, 1.35) * 1.6; dir.set(Math.sin(th) * lean.x, Math.cos(th), Math.sin(th) * lean.z).normalize();
-          const r = h * .034 * (1 - .32 * i / n); const c = p.clone().addScaledVector(dir, seg / 2); qTmp.setFromUnitVectors(up, dir);
-          add(parts.palmTrunk, c.x, c.y, c.z, r, seg * 1.04, r, i % 2 ? look.trunk : new THREE.Color(look.trunk).multiplyScalar(.86).getHex(), 0, qTmp.clone()); p.addScaledVector(dir, seg);
-        }
-        const fronds = 9; const greens = [0x3a9a3f, 0x2f8a38, 0x4cae45, 0x44a13f];
-        for (let k = 0; k < fronds; k += 1) {
-          const yaw = k / fronds * Math.PI * 2 + rnd(k + 10) * .5; const dry = rnd(k + 30) < .08; const pitch = dry ? .95 : -.12 + rnd(k + 20) * .55; const len = h * (.4 + rnd(k + 40) * .12);
-          qYaw.setFromAxisAngle(up, yaw); qPitch.setFromAxisAngle(X, pitch); qTmp.copy(qYaw).multiply(qPitch);
-          add(parts.frond, p.x, p.y, p.z, len, len, len, dry ? 0xc2a24e : greens[(k + Math.floor(rnd(3) * 4)) % 4], 0, qTmp.clone());
-        }
-        for (let k = 0; k < 2; k += 1) { qYaw.setFromAxisAngle(up, rnd(k + 50) * 6.28); qPitch.setFromAxisAngle(X, -.9); qTmp.copy(qYaw).multiply(qPitch); add(parts.frond, p.x, p.y, p.z, h * .22, h * .22, h * .22, 0x5cc04f, 0, qTmp.clone()); } // young fronds pointing up
-        for (let k = 0; k < 4; k += 1) { const a = k * 1.6 + rnd(k + 60); const r = h * .03; add(parts.nut, p.x + Math.cos(a) * r * 1.4, p.y - r * 1.2, p.z + Math.sin(a) * r * 1.4, r, r * 1.1, r, k % 3 ? 0x6b4423 : 0x7c9a34); }
-      });
       oak.forEach(t => {
         if (t.umbrella) { // a wide, flat-topped rain tree
           currentDecor = !!t.decor; const h = t.height, rc = h * .34, rnd = k => random01(t.seed * 11.3 + k), base = look.oakGreens[Math.floor(rnd(1) * look.oakGreens.length)];
@@ -1113,18 +1265,58 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       instanced(trunkGeo, parts.trunk, white, 1.18);
       instanced(blobGeo, parts.blob, white, 1.06);
       instanced(coneGeo, parts.cone, white, 1.08);
-      if (palms.length) {
-        const leafMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient(), side: THREE.DoubleSide });
-        instanced(palmTrunkGeometry(), parts.palmTrunk, white, 1.12); instanced(frondGeometry(), parts.frond, leafMat, null); instanced(new THREE.SphereGeometry(1, 6, 4), parts.nut, white, null);
-      }
+      makePalmInstances(palms);
     }
-    // a palm frond: a long leaf along +z that arches up then droops, folded down the middle, with a ragged leaflet edge
+    // Palm trees, drawn with instancing: a ringed trunk that curves as it leans, a crown of comb-like fronds (some hanging dry), a few young
+    // fronds pointing up and a bunch of coconuts. t: { x, z, baseY, height, seed, lean?, decor?, short? (a small bushy palm), far? (fewer parts) }
+    function makePalmInstances(palms) {
+      if (!palms.length) return; const look = CONFIG.courseVisuals.cartoon; const parts = { trunk: [], frond: [], nut: [] };
+      const up = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1), dir = new THREE.Vector3(), qYaw = new THREE.Quaternion(), qPitch = new THREE.Quaternion(), qRoll = new THREE.Quaternion();
+      const greens = [0x3a9a3f, 0x2f8a38, 0x4cae45, 0x44a13f, 0x56b84b, 0x2d7f37], trunkBase = new THREE.Color(look.trunk), tc = new THREE.Color();
+      const frond = (p, yaw, pitch, roll, len, color, decor) => { qYaw.setFromAxisAngle(up, yaw); qPitch.setFromAxisAngle(X, pitch); qRoll.setFromAxisAngle(Z, roll); parts.frond.push({ x: p.x, y: p.y, z: p.z, sx: len, sy: len, sz: len, q: qYaw.clone().multiply(qPitch).multiply(qRoll), color, decor }); };
+      palms.forEach(t => {
+        const decor = !!t.decor, h = t.height, rnd = k => random01(t.seed * 5.3 + k), short = !!t.short, far = !!t.far;
+        const lean = t.lean || { x: Math.cos(rnd(1) * 6.28), z: Math.sin(rnd(1) * 6.28), amount: .06 + rnd(2) * .24 };
+        const n = far || short ? 4 : 6, seg = h * (short ? .5 : .86) / n, tint = .82 + rnd(70) * .32; const p = new THREE.Vector3(t.x, t.baseY - .2, t.z);
+        for (let i = 0; i < n; i += 1) {
+          const th = lean.amount * Math.pow((i + .5) / n, 1.35) * 1.6; dir.set(Math.sin(th) * lean.x, Math.cos(th), Math.sin(th) * lean.z).normalize();
+          const r = h * (short ? .05 : .034) * (1 - .32 * i / n) * (i === 0 ? 1.18 : 1); const c = p.clone().addScaledVector(dir, seg / 2);
+          parts.trunk.push({ x: c.x, y: c.y, z: c.z, sx: r, sy: seg * 1.04, sz: r, q: new THREE.Quaternion().setFromUnitVectors(up, dir), color: tc.copy(trunkBase).multiplyScalar(tint * (i % 2 ? 1 : .85)).getHex(), decor }); p.addScaledVector(dir, seg);
+        }
+        const count = far ? 8 : short ? 11 : 10 + Math.floor(rnd(4) * 3), spin = rnd(3) * 6.28, shade = Math.floor(rnd(5) * greens.length);
+        for (let k = 0; k < count; k += 1) {
+          const yaw = spin + k / count * Math.PI * 2 + (rnd(k + 10) - .5) * .45, dry = !short && !far && rnd(k + 30) < .07;
+          const pitch = dry ? 1.05 : (short ? -.4 : -.2) + rnd(k + 20) * .55 + (k % 2) * .16; // alternate high and low fronds so the crown looks full
+          const len = h * (short ? .62 : .42) * (.85 + rnd(k + 40) * .32);
+          frond(p, yaw, pitch, (rnd(k + 50) - .5) * .6, len, dry ? 0xc2a24e : greens[(k + shade) % greens.length], decor);
+        }
+        if (far) return;
+        for (let k = 0; k < 2; k += 1) frond(p, rnd(k + 60) * 6.28, -1 + rnd(k + 62) * .25, 0, h * (short ? .3 : .22), 0x62c653, decor); // young fronds pointing up
+        parts.nut.push({ x: p.x, y: p.y - h * .01, z: p.z, sx: h * .042, sy: h * .05, sz: h * .042, color: 0x5d7f33, decor }); // where the fronds meet the trunk
+        if (!short) { const nuts = 3 + Math.floor(rnd(7) * 3); for (let k = 0; k < nuts; k += 1) { const a = k * 2.1 + rnd(k + 64); const r = h * .03; parts.nut.push({ x: p.x + Math.cos(a) * r * 1.3, y: p.y - r * (1.1 + rnd(k + 66) * .6), z: p.z + Math.sin(a) * r * 1.3, sx: r, sy: r * 1.1, sz: r, color: k % 3 ? 0x6b4423 : 0x7c9a34, decor }); } }
+      });
+      const white = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient() }), leafMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient(), side: THREE.DoubleSide }), outlineMat = new THREE.MeshBasicMaterial({ color: look.outline, side: THREE.BackSide });
+      const dummy = new THREE.Object3D(), col = new THREE.Color();
+      const instanced = (geometry, all, material, outlineScale) => [false, true].forEach(decorGroup => {
+        const list = all.filter(q => q.decor === decorGroup); if (!list.length) return;
+        const mesh = new THREE.InstancedMesh(geometry, material, list.length); mesh.castShadow = !decorGroup; mesh.receiveShadow = !decorGroup; const outline = outlineScale ? new THREE.InstancedMesh(geometry, outlineMat, list.length) : null;
+        list.forEach((q, i) => { dummy.position.set(q.x, q.y, q.z); if (q.q) dummy.quaternion.copy(q.q); else dummy.quaternion.identity(); dummy.scale.set(q.sx, q.sy, q.sz); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); mesh.setColorAt(i, col.setHex(q.color));
+          if (outline) { dummy.scale.multiplyScalar(outlineScale); dummy.updateMatrix(); outline.setMatrixAt(i, dummy.matrix); } });
+        courseGroup.add(mesh); if (outline) courseGroup.add(outline);
+      });
+      instanced(palmTrunkGeometry(), parts.trunk, white, 1.12); instanced(frondGeometry(), parts.frond, leafMat, null); instanced(new THREE.SphereGeometry(1, 6, 4), parts.nut, white, null);
+    }
+    // a palm frond: a rib along +z that arches up then droops, lined on both sides with long leaflets that sweep toward the tip and hang
+    // down in a V, so the frond has the spiky, comb-like outline of a real coconut palm
     let frondGeo = null, palmTrunkGeo = null, paddleGeo = null;
     function frondGeometry() {
-      if (frondGeo) return frondGeo; const N = 14, pos = [], idx = [];
-      for (let i = 0; i <= N; i += 1) { const t = i / N; const y = .3 * t - .82 * t * t; let w = .15 * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.12)), .8) * (1 - .25 * t); w *= i % 2 ? 1.25 : .82; pos.push(-w, y - w * .15, t, 0, y + w * .3, t, w, y - w * .15, t); }
-      for (let i = 0; i < N; i += 1) { const a = i * 3, b = a + 3; idx.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1); }
-      frondGeo = new THREE.BufferGeometry(); frondGeo.userData.shared = true; frondGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); frondGeo.setIndex(idx); frondGeo.computeVertexNormals(); return frondGeo;
+      if (frondGeo) return frondGeo; const N = 17, pos = []; const rib = t => [0, .3 * t - .84 * t * t, t];
+      for (let i = 0; i < N; i += 1) {
+        const t0 = i / N, t1 = Math.min(1, (i + 1.45) / N); const w = .27 * Math.pow(Math.sin(Math.PI * Math.min(1, t0 * 1.04 + .05)), .65) * (1 - .38 * t0) + .02;
+        const [ax, ay, az] = rib(t0), [bx, by, bz] = rib(t1);
+        for (const s of [-1, 1]) { const sw = w * (i % 2 ? 1 : .86); pos.push(ax, ay, az, bx, by, bz, s * sw, ay - sw * .5, az + sw * .62); }
+      }
+      frondGeo = new THREE.BufferGeometry(); frondGeo.userData.shared = true; frondGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); frondGeo.computeVertexNormals(); return frondGeo;
     }
     function palmTrunkGeometry() { if (!palmTrunkGeo) { palmTrunkGeo = new THREE.CylinderGeometry(1, 1.14, 1, 8); palmTrunkGeo.userData.shared = true; } return palmTrunkGeo; } // wider at the bottom of each piece: the trunk reads as ringed
     // a broad tropical leaf (banana, monstera): an oval along +z starting at the stem
@@ -1220,6 +1412,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     function clearCourse() {
       scene.remove(courseGroup); disposeGroupResources(courseGroup);
       courseGroup = new THREE.Group(); scene.add(courseGroup);
+      if (courseRuntime.seaFieldTex) { courseRuntime.seaFieldTex.dispose(); courseRuntime.seaFieldTex = null; } courseRuntime.oceanMaterials = []; courseRuntime.hillShapes = []; courseRuntime.terrainGrid = null;
       courseRuntime.treeColliders = []; courseRuntime.waterMaterials = []; courseRuntime.butterflies = []; courseRuntime.flames = []; courseRuntime.flagMesh = null; courseRuntime.flagBasePositions = null; courseRuntime.flagRoot = null;
       clearEffects();
     }
@@ -1227,8 +1420,9 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
 
     // ---------- course details: cart path, tee area, grass tufts, wildflowers, bushes, rocks ----------
     function inAnyHazard(hole, x, z, pad = 1.25) {
-      return hole.bunkers.some(b => Math.hypot((x - b.x) / b.radiusX, (z - b.z) / b.radiusZ) < pad) || hole.water.some(w => Math.hypot((x - w.x) / w.radiusX, (z - w.z) / w.radiusZ) < pad + .15) || (hole.ocean || []).some(o => Math.hypot(x - o.x, z - o.z) < o.R + o.beach + 3 * pad);
+      return hole.bunkers.some(b => Math.hypot((x - b.x) / b.radiusX, (z - b.z) / b.radiusZ) < pad) || hole.water.some(w => Math.hypot((x - w.x) / w.radiusX, (z - w.z) / w.radiusZ) < pad + .15) || (hole.ocean || []).some(o => Math.hypot(x - o.x, z - o.z) < o.R + o.beach + 3 * pad + (o.cliff ? 5 : 0)); // clear of the cliff edge too
     }
+    function steepAt(x, z, hole = currentHole) { const e = .9, h = (a, b) => terrainHeightAt(a, b, hole, true); return Math.hypot(h(x + e, z) - h(x - e, z), h(x, z + e) - h(x, z - e)) / (2 * e); } // ground slope (rise over run)
     function makeCartPath(hole) {
       const P = CONFIG.courseVisuals.cartoon.cartPath; const maxOff = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters - 3; const step = 1.5;
       // starts just in front of the tee box, out to the side (it used to begin behind the tee, where the centre line has no direction, so it cut straight across the tee)
@@ -1352,7 +1546,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function makeRoughDetails(hole) {
       const look = CONFIG.courseVisuals.cartoon; const edge = hole.fairwayWidthMeters / 2; const g = hole.green.center; const tufts = [], flowerSpots = [], rocks = [], bushes = []; let seed = hole.number * 7777;
-      const okSpot = (x, z) => { const s = surfaceInfoAt(x, z).surface; if (s !== 'rough') return false; if (inAnyHazard(hole, x, z, 1.35)) return false; if (Math.hypot(x - g.x, z - g.z) < hole.green.radiusMeters + hole.green.fringeMeters + 2) return false; if (Math.abs(x) < 6 && Math.abs(z - CONFIG.world.teeZ) < 7) return false; const pp = courseRuntime.cartPathPts || []; for (let k = 0; k < pp.length; k += 2) if (Math.abs(pp[k].z - z) < 3 && Math.hypot(pp[k].x - x, pp[k].z - z) < CONFIG.courseVisuals.cartoon.cartPath.width / 2 + 1) return false; return true; };
+      const okSpot = (x, z) => { const s = surfaceInfoAt(x, z).surface; if (s !== 'rough') return false; if (THEME.fx.islandLand && steepAt(x, z, hole) > .45) return false; /* no grass tufts, flowers or bushes stuck on a cliff face */ if (inAnyHazard(hole, x, z, 1.35)) return false; if (Math.hypot(x - g.x, z - g.z) < hole.green.radiusMeters + hole.green.fringeMeters + 2) return false; if (Math.abs(x) < 6 && Math.abs(z - CONFIG.world.teeZ) < 7) return false; const pp = courseRuntime.cartPathPts || []; for (let k = 0; k < pp.length; k += 2) if (Math.abs(pp[k].z - z) < 3 && Math.hypot(pp[k].x - x, pp[k].z - z) < CONFIG.courseVisuals.cartoon.cartPath.width / 2 + 1) return false; return true; };
       for (let i = 0; i < look.tufts; i += 1) {
         seed += 1; const d = random01(seed) * (hole.lengthMeters + 10); const c = fairwayCenterAtDistance(d, hole); const side = random01(seed * 1.9) > .5 ? 1 : -1; const off = edge + 3.5 + random01(seed * 2.7) ** 1.6 * (hole.roughWidthMeters - 2);
         const x = c.x + side * off, z = c.z + (random01(seed * 4.1) - .5) * 3; if (!okSpot(x, z)) continue;
@@ -1420,22 +1614,23 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
         meadow.rotation.x = -Math.PI / 2; meadow.position.set(cx, minY - 1.2, cz); meadow.receiveShadow = false; courseGroup.add(meadow);
       }
       // rolling hills in a ring around the hole, each topped with a scatter of trees
-      const hills = [], hillTrees = [], hillPines = []; const hillColors = THEME.fx.islandLand ? [0x2f8f45, 0x2a8040, 0x3a9c4c, 0x25773c, 0x40a552] : [0x5aa851, 0x4f9a4a, 0x67b25a, 0x5e9f55, 0x72b862];
+      const hills = [], hillTrees = [], hillPines = [], hillPalms = []; const hillColors = THEME.fx.islandLand ? [0x2f8f45, 0x2a8040, 0x3a9c4c, 0x25773c, 0x40a552] : [0x5aa851, 0x4f9a4a, 0x67b25a, 0x5e9f55, 0x72b862];
       const ring = (x0, x1, z0, z1, pad) => { const per = 2 * ((x1 - x0) + (z1 - z0)); let t = rnd() * per; const pts = []; while (pts.length < 44) { t += per / 44 * (.7 + rnd() * .6); const u = t % per; let x, z, nx = 0, nz = 0; if (u < x1 - x0) { x = x0 + u; z = z0; nz = -1; } else if (u < (x1 - x0) + (z1 - z0)) { x = x1; z = z0 + u - (x1 - x0); nx = 1; } else if (u < 2 * (x1 - x0) + (z1 - z0)) { x = x1 - (u - (x1 - x0) - (z1 - z0)); z = z1; nz = 1; } else { x = x0; z = z1 - (u - 2 * (x1 - x0) - (z1 - z0)); nx = -1; } const out = pad + rnd() * 90; pts.push([x + nx * out, z + nz * out]); } return pts; };
       ring(B.minX - M, B.maxX + M, B.minZ - M, B.maxZ + M, 45).forEach(([x, z], i) => {
         const island = THEME.fx.islandLand; if (island && (hole.ocean || []).some(o => Math.hypot(x - o.x, z - o.z) < o.R + 60)) return; // open sea on the coast side
-        const far = island && z < hole.green.center.z - 40; // green, jungly volcanic ridges rise beyond the green
+        if (island && hole.openHorizon && z < hole.green.center.z - 40 && random01(i * 5.3 + hole.number) < .55) return; // high holes: open sea beyond the green
+        const far = island && !hole.openHorizon && z < hole.green.center.z - 40; // green, jungly volcanic ridges rise beyond the green
         const r = (island ? 55 : 45) + rnd() * 70, hgt = r * (island ? (far ? .55 + rnd() * .5 : .25 + rnd() * .25) : .2 + rnd() * .22), y = island ? hole.seaLevel - 1 : minY - 1.5;
         hills.push({ x, y, z, sx: r, sy: hgt, sz: r * (.8 + rnd() * .5), ry: rnd() * 3, color: hillColors[i % hillColors.length] });
         const n = 5 + Math.floor(rnd() * 7);
         for (let k = 0; k < n; k += 1) { const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * r * .75; const tx = x + Math.cos(a) * d, tz = z + Math.sin(a) * d; const hill = hills[hills.length - 1], cr = Math.cos(hill.ry), sr = Math.sin(hill.ry), lx = (tx - x) * cr - (tz - z) * sr, lz = (tx - x) * sr + (tz - z) * cr; const top = y + hgt * Math.sqrt(Math.max(0, 1 - (lx / hill.sx) ** 2 - (lz / hill.sz) ** 2)); const th = 9 + rnd() * 8; // the real height of the (squashed, turned) hill under the tree
-          if (THEME.fx.islandLand) { hillTrees.push({ x: tx, y: top + th * .1, z: tz, sx: th * .42, sy: th * .3, sz: th * .42, color: look.oakGreens[(k + i) % 5] }); continue; }
+          if (THEME.fx.islandLand) { const pr = random01(i * 37.1 + k * 5.3 + hole.number); if (pr < .6) { hillPalms.push({ x: tx, z: tz, baseY: top - .25, height: th * (.95 + random01(i * 3.9 + k) * .28), seed: 7000 + i * 41 + k, decor: true, far: true }); continue; } hillTrees.push({ x: tx, y: top + th * .1, z: tz, sx: th * .42, sy: th * .3, sz: th * .42, color: look.oakGreens[(k + i) % 5] }); continue; }
           if (rnd() < .45) hillPines.push({ x: tx, y: top + th * .45, z: tz, sx: th * .24, sy: th, sz: th * .24, color: look.pineGreens[k % 3] });
           else { const fall = rnd() < .25; hillTrees.push({ x: tx, y: top + th * .55, z: tz, sx: th * .38, sy: th * .34, sz: th * .38, color: fall ? look.autumn[Math.floor(rnd() * 5)] : look.oakGreens[k % 5] }); } }
       });
       const inst = (geo, list, shadow = false) => { if (!list.length) return; const mesh = new THREE.InstancedMesh(geo, toon(), list.length); const dummy = new THREE.Object3D(); const col = new THREE.Color(); list.forEach((it, i) => { dummy.position.set(it.x, it.y, it.z); dummy.rotation.set(it.rx || 0, it.ry || 0, it.rz || 0); dummy.scale.set(it.sx, it.sy, it.sz); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); mesh.setColorAt(i, col.setHex(it.color)); }); mesh.castShadow = shadow; mesh.receiveShadow = shadow; courseGroup.add(mesh); return mesh; };
       inst(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), hills);
-      inst(new THREE.SphereGeometry(1, 10, 8), hillTrees); inst(new THREE.ConeGeometry(1, 1, 8), hillPines);
+      inst(new THREE.SphereGeometry(1, 10, 8), hillTrees); inst(new THREE.ConeGeometry(1, 1, 8), hillPines); makePalmInstances(hillPalms); courseRuntime.hillShapes = hills; // palms on the far hills too
       // shrubs and ferns along the foot of the tree lines, so the forest meets the rough softly
       const edge = hole.fairwayWidthMeters / 2 + hole.roughWidthMeters; const shrubs = [], ferns = [], bigLeaves = [], stems = [];
       // island undergrowth: banana plants and big monstera leaves where the jungle meets the rough
@@ -1446,8 +1641,8 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       };
       for (let d = -10; d < hole.lengthMeters + 20; d += 2.6) {
         const c = fairwayCenterAtDistance(d, hole), n = fairwayCenterAtDistance(d + 1, hole); const dx = n.x - c.x, dz = n.z - c.z, L = Math.hypot(dx, dz); if (L < .2) continue; const nx = -dz / L, nz = dx / L;
-        [-1, 1].forEach(side => { if (rnd() < .25) return; const off = edge + 2.2 + rnd() * 3; const x = c.x + nx * side * off, z = c.z + nz * side * off; if (!outOfBoundsAt(x, z, hole) || inAnyHazard(hole, x, z, 1.4)) return; if (Math.hypot(x - hole.green.center.x, z - hole.green.center.z) < hole.green.radiusMeters + hole.green.fringeMeters + 6) return; const y = terrainHeightAt(x, z, hole);
-          if (THEME.fx.palms) { jungleClump(x, y, z, rnd); return; }
+        [-1, 1].forEach(side => { if (rnd() < .25) return; const off = edge + 2.2 + rnd() * (THEME.fx.palms ? 7 : 3); const jit = THEME.fx.palms ? (rnd() - .5) * 2.4 : 0; const x = c.x + nx * side * off + dx / L * jit, z = c.z + nz * side * off + dz / L * jit; /* island undergrowth straggles rather than lining the edge */ if (!outOfBoundsAt(x, z, hole) || inAnyHazard(hole, x, z, 1.4)) return; if (Math.hypot(x - hole.green.center.x, z - hole.green.center.z) < hole.green.radiusMeters + hole.green.fringeMeters + 6) return; const y = terrainHeightAt(x, z, hole);
+          if (THEME.fx.palms) { if (steepAt(x, z, hole) < .6) jungleClump(x, y, z, rnd); return; }
           if (rnd() < .6) { const r = .7 + rnd() * .8; const fall = rnd() < .18; for (let k = 0; k < 3; k += 1) { const rr = r * (.7 + rnd() * .4); shrubs.push({ x: x + (k - 1) * r * .7, y: y + rr * .6, z: z + (rnd() - .5) * r, sx: rr, sy: rr * .8, sz: rr, color: fall ? look.autumn[Math.floor(rnd() * 5)] : look.oakGreens[Math.floor(rnd() * 5)] }); } }
           else for (let k = 0; k < 6; k += 1) { const a = k / 6 * Math.PI * 2 + rnd(); ferns.push({ x: x + Math.cos(a) * .25, y: y + .35, z: z + Math.sin(a) * .25, sx: .12, sy: .75, sz: .05, rx: Math.cos(a) * .7, rz: -Math.sin(a) * .7, ry: 0, color: [0x3f8a3a, 0x4f9e44, 0x2f7a35][k % 3] }); } });
       }
@@ -1502,12 +1697,34 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
       for (let i = 0; i < 14; i += 1) { const cloud = new THREE.Group(); const a = (i / 14) * Math.PI * 2 + random01(i) * .4; const r = 260 + random01(i * 3) * 160; cloud.position.set(Math.cos(a) * r, 70 + random01(i * 5) * 45, Math.sin(a) * r - 150);
         for (let k = 0; k < 5; k += 1) { const puff = new THREE.Mesh(geo, mat); const s = 9 + random01(i * 9 + k) * 9; puff.scale.set(s * 1.4, s * .8, s); puff.position.set((k - 2) * 12 + random01(i + k) * 6, random01(i * 2 + k) * 5, random01(i * 4 + k) * 8); cloud.add(puff); }
         cloud.userData.speed = .6 + random01(i * 7) * .8; clouds.add(cloud); } })();
+    // How far each bit of sea round the hole is from the nearest land (the island's shore and the hills offshore), baked into a small texture.
+    // The water uses it for the pale shallows, reefs and caustics by the beaches, surf at every shore and deep blue further out.
+    function buildSeaField(hole) {
+      const T = courseRuntime.terrainGrid; if (!T) return null;
+      const pad = 90, cx = (T.maxX - T.minX) / T.cols, cz = (T.maxZ - T.minZ) / T.rows, W = T.cols + 1 + pad * 2, H = T.rows + 1 + pad * 2, N = W * H;
+      const x0 = T.minX - pad * cx, z0 = T.maxZ + pad * cz, sea = hole.seaLevel - .3, land = new Uint8Array(N); // the open sea is drawn .3 m below sea level
+      for (let i = 0; i <= T.rows; i += 1) for (let j = 0; j <= T.cols; j += 1) if (T.pos[(i * (T.cols + 1) + j) * 3 + 1] > sea) land[(i + pad) * W + j + pad] = 1;
+      (courseRuntime.hillShapes || []).forEach(hl => { // the hills are squashed half-spheres standing in the sea
+        const rise = sea - hl.y; if (rise >= hl.sy) return; const lim = rise > 0 ? 1 - (rise / hl.sy) ** 2 : 1, cr = Math.cos(hl.ry), sr = Math.sin(hl.ry), R = Math.max(hl.sx, hl.sz);
+        const j0 = Math.max(0, Math.floor((hl.x - R - x0) / cx)), j1 = Math.min(W - 1, Math.ceil((hl.x + R - x0) / cx)), i0 = Math.max(0, Math.floor((z0 - hl.z - R) / cz)), i1 = Math.min(H - 1, Math.ceil((z0 - hl.z + R) / cz));
+        for (let i = i0; i <= i1; i += 1) for (let j = j0; j <= j1; j += 1) { const dx = x0 + j * cx - hl.x, dz = z0 - i * cz - hl.z, lx = dx * cr - dz * sr, lz = dx * sr + dz * cr; if ((lx / hl.sx) ** 2 + (lz / hl.sz) ** 2 < lim) land[i * W + j] = 1; }
+      });
+      const chamfer = D => { const s2 = Math.SQRT2; // two-pass distance transform
+        for (let i = 0; i < H; i += 1) for (let j = 0; j < W; j += 1) { const k = i * W + j; let v = D[k]; if (v === 0) continue; if (j > 0) v = Math.min(v, D[k - 1] + 1); if (i > 0) { v = Math.min(v, D[k - W] + 1); if (j > 0) v = Math.min(v, D[k - W - 1] + s2); if (j < W - 1) v = Math.min(v, D[k - W + 1] + s2); } D[k] = v; }
+        for (let i = H - 1; i >= 0; i -= 1) for (let j = W - 1; j >= 0; j -= 1) { const k = i * W + j; let v = D[k]; if (v === 0) continue; if (j < W - 1) v = Math.min(v, D[k + 1] + 1); if (i < H - 1) { v = Math.min(v, D[k + W] + 1); if (j < W - 1) v = Math.min(v, D[k + W + 1] + s2); if (j > 0) v = Math.min(v, D[k + W - 1] + s2); } D[k] = v; } };
+      const toLand = new Float32Array(N), toSea = new Float32Array(N); for (let k = 0; k < N; k += 1) { toLand[k] = land[k] ? 0 : 1e6; toSea[k] = land[k] ? 1e6 : 0; } chamfer(toLand); chamfer(toSea);
+      const cell = (cx + cz) / 2, data = new Uint8Array(N * 4);
+      for (let k = 0; k < N; k += 1) { const m = land[k] ? -(toSea[k] - .5) * cell : (toLand[k] - .5) * cell; data[k * 4] = Math.max(0, Math.min(255, Math.round((m + 12) / 128 * 255))); data[k * 4 + 3] = 255; }
+      const tex = new THREE.DataTexture(data, W, H, THREE.RGBAFormat, THREE.UnsignedByteType); tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.generateMipmaps = false; tex.userData.shared = true; tex.needsUpdate = true;
+      return { tex, a: new THREE.Vector4(x0, z0, 1 / cx, 1 / cz), n: new THREE.Vector3(W, H, cell) };
+    }
     function buildCourse(hole) {
       clearCourse();
       makeTerrain(hole); makeFairway(hole); makeTee(hole); makeGreen(hole);
       hole.bunkers.forEach(makeBunker); hole.water.forEach(makeWater); (hole.ocean || []).forEach(o => makeOcean(o, hole)); makeForest(hole);
       makeYardageMarkers(hole); makeOutOfBoundsStakes(hole); makeFlagAndCup(hole);
       makeCartPath(hole); makeTeeArea(hole); makeRoughDetails(hole); makeScenery(hole);
+      if (THEME.fx.islandLand && (courseRuntime.oceanMaterials || []).length) { const f = buildSeaField(hole); if (f) { courseRuntime.seaFieldTex = f.tex; courseRuntime.oceanMaterials.forEach(m => { m.uniforms.uField.value = f.tex; m.uniforms.uFieldA.value.copy(f.a); m.uniforms.uFieldN.value.copy(f.n); m.uniforms.uHasField.value = 1; }); } }
       courseRuntime.bounds = hole.bounds;
     }
 
@@ -1768,7 +1985,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     }
     function syncBoardCourse() { document.querySelectorAll('[data-board-course]').forEach(b => b.classList.toggle('on', b.dataset.boardCourse === boardCourse)); const w = document.getElementById('board-courses'); if (w) w.hidden = Object.keys(COURSES).length < 2; }
     function totalCoursePar() { return COURSE_DATA.holes.reduce((sum, hole) => sum + hole.par, 0); }
-    function bestScoreKey(id = COURSE_DATA.id) { return id === 'classic' ? CONFIG.storage.bestScoreKey : `fairwayFriends.bestScore.${id}.v1`; }
+    function bestScoreKey(id = COURSE_DATA.id) { const n = COURSES[id] ? COURSES[id].holes.length : 18; return id === 'classic' ? CONFIG.storage.bestScoreKey : n === 9 ? `fairwayFriends.bestScore.${id}.v1` : `fairwayFriends.bestScore.${id}${n}.v1`; } // a new key whenever a course changes size
     function updateBestScoreDisplay() {
       const best = readStoredJSON(bestScoreKey(), null); const element = $('best-score');
       if (!best || !Number.isFinite(best.score)) { element.textContent = ''; element.classList.add('empty'); return; } element.classList.remove('empty');
@@ -2654,7 +2871,7 @@ diffuseColor.rgb = bc; diffuseColor.a *= 1.0 - smoothstep(.1, .24, bd2);`);
     const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
     function sharpenTextures(root) { root.traverse(o => { const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; mats.forEach(m => { ['map', 'alphaMap', 'bumpMap'].forEach(k => { const t = m[k]; if (t && t.isTexture && t.anisotropy < maxAniso) { t.anisotropy = maxAniso; t.needsUpdate = true; } }); }); }); }
     function loadHole(index, present = true) {
-      currentHoleIndex = THREE.MathUtils.clamp(index, 0, COURSE_DATA.holes.length - 1); currentHole = normalizeHole(COURSE_DATA.holes[currentHoleIndex]); gameComplete = false; $('scorecard-overlay').hidden = true; buildCourse(currentHole); sharpenTextures(scene); scene.fog.far = Math.max(CONFIG.camera.fogFar, currentHole.lengthMeters * 1.3); resetBallState(); rerollWind(true); updateHud(); updateMinimap(); if (present) startHolePresentation();
+      currentHoleIndex = THREE.MathUtils.clamp(index, 0, COURSE_DATA.holes.length - 1); currentHole = normalizeHole(COURSE_DATA.holes[currentHoleIndex]); gameComplete = false; $('scorecard-overlay').hidden = true; buildCourse(currentHole); sharpenTextures(scene); scene.fog.near = CONFIG.camera.fogNear; scene.fog.far = Math.max(CONFIG.camera.fogFar, currentHole.lengthMeters * 1.3); camera.far = CONFIG.camera.farClip; if (currentHole.openHorizon) { scene.fog.near = 150; scene.fog.far = 1700; camera.far = 2700; } camera.updateProjectionMatrix(); /* the high holes see far out to sea */ resetBallState(); rerollWind(true); updateHud(); updateMinimap(); if (present) startHolePresentation();
     }
 
     function launchBall(power, sidespinRpm, shotQuality, launchDirection) {

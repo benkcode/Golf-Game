@@ -1,14 +1,14 @@
-# Fairway Friends v42
+# Fairway Friends v45
 
-A cartoon golf game you can play solo or against friends on their own computers and phones. Two courses: the original 18 holes (par 72, 6,655 yards) and **Kai Lagoon**, a 9-hole island course (par 35, 3,040 yards) with palm trees, jungle, lagoons and ocean cliffs.
+A cartoon golf game you can play solo or against friends on their own computers and phones. Two courses: the original 18 holes (par 72, 6,655 yards) and **Kai Lagoon**, an 18-hole island course (par 71, 6,480 yards): the front nine down among the palms, lagoons and beaches, the back nine up on the headland, high above the sea and windier, with the ocean in view on every hole.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v42.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v45.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v42 && python3 server.py
+cd ~/Downloads/fairway-friends-v45 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -71,7 +71,7 @@ Card yardages follow the fairway, like a real course. On the bending holes the s
 
 Club distances (pure strike, no wind, carry / total): Driver 260 / 282 yd, 3-Wood 234 / 251, 7-Iron 189 / 204, Wedge 107 / 115.
 
-## Kai Lagoon (9 holes)
+## Kai Lagoon (18 holes)
 
 | Hole | Name | Par | Yards | What to expect |
 |---|---|---|---|---|
@@ -84,17 +84,29 @@ Club distances (pure strike, no wind, carry / total): Driver 260 / 282 yd, 3-Woo
 | 7 | Cliffside | 4 | 410 | The ocean all down the left, green on the cliff edge |
 | 8 | Reef Carry | 4 | 320 | Cut across the rocky cove as far as you dare |
 | 9 | Sunset Finish | 4 | 390 | Beach and ocean down the right |
-| | **Total** | **35** | **3,040** | |
+| | **Out** | **35** | **3,040** | |
+| 10 | Trade Winds | 4 | 405 | Downhill off the headland, cliffs and ocean down the right |
+| 11 | Blowhole | 3 | 185 | Carry a rocky ocean inlet from one cliff to the next |
+| 12 | Ridge Run | 5 | 545 | Climbs a long ridge, the sea far below on the left |
+| 13 | Lookout Point | 4 | 355 | Uphill to a green on the point: long means the ocean |
+| 14 | Whale Watch | 4 | 425 | Doglegs left round a cliff bay; cut across it if you dare |
+| 15 | Crater Rim | 3 | 160 | Down over a crater pond, the sea behind the green |
+| 16 | Pali Drop | 4 | 395 | Drops 30 m from tee to green, beach behind; a perfect drive can reach |
+| 17 | Seabird Cliffs | 5 | 530 | The windiest hole: the cliffs close in on the right |
+| 18 | Kai Point | 4 | 440 | Home along the cliff edge, ocean left and behind the green |
+| | **In** | **36** | **3,440** | |
+| | **Total** | **71** | **6,480** | |
 
 Island rules:
 
 - **Jungle**: past the rough on either side is thick jungle (there are no white stakes on this course). A ball in the jungle costs 1 stroke and is dropped on the grass at the edge of the jungle where it went in, the same distance down the hole.
 - **Ocean**: the sea is a water hazard, never out of bounds. A ball in the ocean costs 1 stroke and is dropped on the grass at the nearest bit of shore to where it went in, never closer to the hole, and clear of the cliff edge.
 - **Beaches** play like bunkers: only the Wedge works from the sand.
-- **Sea breeze**: the coastal holes (6 to 9) are windier than the jungle holes.
-- The lagoon on hole 3 is a normal pond: 1 stroke and a drop on the dry grass behind it.
+- **Sea breeze**: the coastal holes (6 to 9) are windier than the jungle holes, and the back nine up on the headland is windier still (up to about 18 mph).
+- **Cliffs**: on the back nine a ball that runs off a cliff top is in the ocean: 1 stroke, and you drop on the grass a few metres back from the edge.
+- The lagoon on hole 3 and the crater pond on 15 are normal ponds: 1 stroke and a drop on the dry grass behind them.
 
-The island has its own best score and its own leaderboard.
+The island has its own best score and its own leaderboard. Rounds from when Kai Lagoon had 9 holes stay saved, but only full 18-hole rounds go on the Kai Lagoon board now.
 
 ## Phones and tablets
 
@@ -175,7 +187,7 @@ The CrazyGames page lives on CrazyGames' domain, so the server now allows cross-
 ### 2. Build the upload
 
 ```
-cd ~/Downloads/fairway-friends-v42
+cd ~/Downloads/fairway-friends-v45
 python3 tools/build_crazygames.py --api https://YOUR-APP.onrender.com
 ```
 
@@ -215,7 +227,7 @@ These checks use a stand-in SDK, so they check the game's side of every call but
 - `game.js`: the game itself (graphics, physics, golfers, multiplayer, sound)
 - `server.py`: serves the game and runs the multiplayer rooms
 - `course-data.js`: the 18 hole layouts, in yards (the server reads the pars from here too)
-- `course-island.js`: the 9 Kai Lagoon holes, including the ocean and beaches (the server reads these pars too)
+- `course-island.js`: the 18 Kai Lagoon holes, including the ocean, beaches and cliffs (the server reads these pars too)
 - `clubs.js`: the cartoon club models
 - `platform.js`: the CrazyGames SDK layer (saves, rooms, invites, settings); does nothing outside CrazyGames
 - `config.js`: build settings (empty for the normal copy; the CrazyGames build writes its own)

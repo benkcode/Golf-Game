@@ -49,7 +49,7 @@ def read_pars(filename="course-data.js", fallback=(4, 4, 3, 5, 4, 3, 4, 4, 5, 4,
 
 
 # every course the game offers: id -> pars (the original 18 holes are "classic")
-COURSE_PARS = {"classic": read_pars("course-data.js"), "island": read_pars("course-island.js", (4, 4, 3, 5, 4, 3, 4, 4, 4))}
+COURSE_PARS = {"classic": read_pars("course-data.js"), "island": read_pars("course-island.js", (4, 4, 3, 5, 4, 3, 4, 4, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4))}
 PARS = COURSE_PARS["classic"]
 
 

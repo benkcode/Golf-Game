@@ -51,7 +51,7 @@
     },
     removeItem(k) { try { sdk.data.removeItem(k); } catch (e) { note('error', { op: 'data.removeItem', key: k, error: String(e && e.message || e) }); } }
   };
-  const KNOWN_KEYS = ['fairwayFriends.settings.v1', 'fairwayFriends.bestScore18.v1', 'fairwayFriends.bestScore.island.v1', 'fairwayFriends.tips.v1', 'fairwayFriends.tutorialDone.v1', 'fairwayFriends.teleportTaught.v1', 'fairwayFriends.history.v1', 'fairwayFriends.device.v1'];
+  const KNOWN_KEYS = ['fairwayFriends.settings.v1', 'fairwayFriends.bestScore18.v1', 'fairwayFriends.bestScore.island.v1', 'fairwayFriends.bestScore.island18.v1', 'fairwayFriends.tips.v1', 'fairwayFriends.tutorialDone.v1', 'fairwayFriends.teleportTaught.v1', 'fairwayFriends.history.v1', 'fairwayFriends.device.v1'];
   function dataSize(changedKey, changedValue) { let total = 0; KNOWN_KEYS.forEach(k => { const v = k === changedKey ? changedValue : (sdk ? safeGet(k) : null); if (v) total += k.length + v.length + 6; }); return total; }
   function safeGet(k) { try { return sdk.data.getItem(k); } catch (e) { return null; } }
   const store = { getItem: k => (state.dataModule ? cgData : local).getItem(k), setItem: (k, v) => (state.dataModule ? cgData : local).setItem(k, v), removeItem: k => (state.dataModule ? cgData : local).removeItem(k) };
