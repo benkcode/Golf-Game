@@ -1,14 +1,14 @@
-# Fairway Friends v40
+# Fairway Friends v42
 
-A cartoon 18-hole golf game (par 72, 6,655 yards) you can play solo or against friends on their own computers and phones.
+A cartoon golf game you can play solo or against friends on their own computers and phones. Two courses: the original 18 holes (par 72, 6,655 yards) and **Kai Lagoon**, a 9-hole island course (par 35, 3,040 yards) with palm trees, jungle, lagoons and ocean cliffs.
 
 ## Start the game
 
-1. Unzip `fairway-friends-v40.zip` into your Mac's Downloads folder.
+1. Unzip `fairway-friends-v42.zip` into your Mac's Downloads folder.
 2. Open Terminal and paste this one line:
 
 ```bash
-cd ~/Downloads/fairway-friends-v40 && python3 server.py
+cd ~/Downloads/fairway-friends-v42 && python3 server.py
 ```
 
 3. Keep Terminal open and visit [http://localhost:8010](http://localhost:8010) in Chrome.
@@ -19,10 +19,11 @@ If Terminal says the address is already in use, an older copy is still running: 
 
 ## Playing with friends
 
-On the sign-in screen, type your name and pick your golfer (boy or girl). The girl golfer carries the limited edition pink club set.
+On the sign-in screen, type your name, pick your golfer (boy or girl) and pick a course: **18 holes** or **Kai Lagoon**. The girl golfer carries the limited edition pink club set. The game remembers the course you last picked.
 
 - Tap **Play with friends**, then **Create a room**. It shows your 4-letter room code in big tiles. Tap **Share invite** (on phones it opens the share sheet for Messages, WhatsApp and so on) or **Copy code**. The invite link is tucked under "Or send the invite link". During the round the code stays on the leaderboard: tap it to copy it again.
 - Friends tap **Play with friends**, type the code and press **Join room**, or just open the invite link (it fills the code in for them).
+- The lobby shows the course. The host can switch between **18 holes** and **Kai Lagoon** until the round starts; everyone else's game follows automatically.
 - When everyone appears in the lobby, the host presses **Start round**.
 - Up to 4 players. Everyone plays the same wind.
 
@@ -32,7 +33,7 @@ Rules in a room:
 - You watch each other's shots live, with a coloured tracer.
 - The leaderboard (top right) shows everyone's score to par. Press **View scorecard** for the full card.
 - After each hole the scorecard shows everyone's scores; anyone can tee off the next hole. On later holes, the lowest score on the last hole tees off first.
-- Lowest total after 18 holes wins. The scorecard shows the front nine (OUT), back nine (IN) and total, like a real card.
+- Lowest total wins. On the 18 holes the scorecard shows the front nine (OUT), back nine (IN) and total, like a real card.
 
 ### Friends on the same Wi-Fi
 
@@ -51,7 +52,7 @@ Render.com has a free plan that can run `server.py` as-is:
 
 Free Render servers go to sleep when nobody is playing, so open the link a minute before your friends do. Rooms are kept in memory, so they reset if the server restarts.
 
-## The course
+## The 18 holes
 
 | Hole | Name | Par | Yards | | Hole | Name | Par | Yards |
 |---|---|---|---|---|---|---|---|---|
@@ -69,6 +70,31 @@ Free Render servers go to sleep when nobody is playing, so open the link a minut
 Card yardages follow the fairway, like a real course. On the bending holes the straight line to the green is shorter, which is what makes the shortcuts pay: carry the pond on 14 and you can drive the green; hug the creek on 11 or the lake on 16 and the green is reachable in two. Water hazards and their banks are always in play (never out of bounds), and a ball in the water is dropped on the nearest dry grass that isn't closer to the hole.
 
 Club distances (pure strike, no wind, carry / total): Driver 260 / 282 yd, 3-Wood 234 / 251, 7-Iron 189 / 204, Wedge 107 / 115.
+
+## Kai Lagoon (9 holes)
+
+| Hole | Name | Par | Yards | What to expect |
+|---|---|---|---|---|
+| 1 | Aloha Start | 4 | 360 | A gentle opener between the palms |
+| 2 | Coconut Row | 4 | 340 | Doglegs right to a raised green |
+| 3 | Lagoon Hop | 3 | 150 | All carry over a turquoise lagoon |
+| 4 | Banyan Bend | 5 | 520 | A long S-bend through the jungle |
+| 5 | Jungle Tunnel | 4 | 380 | Straight and narrow, jungle on both sides |
+| 6 | Beach Break | 3 | 170 | The ocean waits behind the green |
+| 7 | Cliffside | 4 | 410 | The ocean all down the left, green on the cliff edge |
+| 8 | Reef Carry | 4 | 320 | Cut across the rocky cove as far as you dare |
+| 9 | Sunset Finish | 4 | 390 | Beach and ocean down the right |
+| | **Total** | **35** | **3,040** | |
+
+Island rules:
+
+- **Jungle**: past the rough on either side is thick jungle (there are no white stakes on this course). A ball in the jungle costs 1 stroke and is dropped on the grass at the edge of the jungle where it went in, the same distance down the hole.
+- **Ocean**: the sea is a water hazard, never out of bounds. A ball in the ocean costs 1 stroke and is dropped on the grass at the nearest bit of shore to where it went in, never closer to the hole, and clear of the cliff edge.
+- **Beaches** play like bunkers: only the Wedge works from the sand.
+- **Sea breeze**: the coastal holes (6 to 9) are windier than the jungle holes.
+- The lagoon on hole 3 is a normal pond: 1 stroke and a drop on the dry grass behind it.
+
+The island has its own best score and its own leaderboard.
 
 ## Phones and tablets
 
@@ -104,14 +130,14 @@ Water costs 1 stroke and you drop on dry grass behind the pond. Out of bounds (p
 
 ## Leaderboard and saved scores
 
-Every finished 18-hole round (solo or in a room) is posted to the leaderboard automatically. Open **🏆 Leaderboard** on the main menu:
+Every finished round (solo or in a room) is posted to the leaderboard automatically. Each course has its own board and its own best score. Open **🏆 Leaderboard** on the main menu and pick **18 holes** or **Kai Lagoon** at the top:
 
 - **All-time / This week / Today**: each golfer's best round, lowest score first. You're highlighted.
 - **My rounds**: every round you've finished on this device, with your best and your average.
 
 At the end of a round the scorecard shows where you placed ("You're #2 of 57 golfers all-time").
 
-Scores are checked on the server (all 18 holes, each between 1 stroke and double par; room rounds are recorded by the server itself), and one device can't post rounds seconds apart.
+Scores are checked on the server (every hole of that course, each between 1 stroke and double par; room rounds are recorded by the server itself), and one device can't post rounds seconds apart.
 
 ### Keeping scores on Render (important)
 
@@ -138,13 +164,63 @@ Every green has its own shape and slopes: crowns, bowls, ridges, false fronts an
 
 The background tune, "Fairway Stroll", is an original piece written for this game and generated live in the browser. There are no audio files and no third-party music, so there is nothing to license. Turn it on or off in Settings.
 
+## CrazyGames
+
+The game runs on CrazyGames from a separate build. Your Render site keeps working exactly as before, and the CrazyGames copy talks to that same Render server for rooms, live updates and the leaderboard.
+
+### 1. Put the new server.py on Render first
+
+The CrazyGames page lives on CrazyGames' domain, so the server now allows cross-origin requests (CORS). Push this version to GitHub so Render redeploys it, then check `https://YOUR-APP.onrender.com/health` in a browser shows `{"ok": true, ...}`.
+
+### 2. Build the upload
+
+```
+cd ~/Downloads/fairway-friends-v42
+python3 tools/build_crazygames.py --api https://YOUR-APP.onrender.com
+```
+
+This makes `dist/fairway-friends-crazygames.zip`. Upload that zip to the CrazyGames developer portal. (The build adds the CrazyGames SDK tag, points the game at your server and leaves out server.py.)
+
+### 3. Settings in the CrazyGames developer portal
+
+- Progress save: **"Yes, using the Data Module from the CrazyGames SDK"** (without it the Data module is switched off and CrazyGames shows "Your progress won't be saved!")
+- Multiplayer: yes, with a lobby size of **1 to 4 players**
+- Instant Multiplayer: supported. Turn it on if you want the "Play with friends" entry point to drop players straight into a room
+- Chat: the game has **no chat**. With CrazyGames' "disable chat" setting on, other players' typed names are hidden and shown as Player 2, 3...
+- Keep your Render service awake if you can (a paid instance, or an uptime pinger hitting `/health`). The free plan sleeps after 15 minutes and the first room of the day then takes up to a minute to open (the game shows "Waking up the game server...")
+
+### What the game does with the SDK
+
+- Initialises the SDK while the page loads, before any save is read, and reports loading start and stop
+- Saves (settings, best score, round history, tutorial flags) go to the Data module. The first time, it copies an existing browser save across without overwriting anything newer: it keeps the better best score and merges the round history
+- Gameplay start and stop: start when a hole is being played (including the hole flyover), stop on pause, scorecards, lobby and menus
+- Rooms: reports the room code, whether it can be joined (only in the lobby with a free seat) and the invite parameters; calls `leftRoom` when you leave
+- Invites: joins the room from an invite link at startup, and from the join listener while the game is open. Missing, expired, full and wrong-region rooms each get a clear message
+- Instant Multiplayer: opens a private room straight away, named after the CrazyGames username
+- Respects `muteAudio` and `disableChat`, including when they change mid-game
+- Add `?ffdebug=1` to the page address to log every SDK call and print a diagnostics snapshot in the browser console. Room failures are always logged with the tag `[FF/room]`
+
+### Automated checks
+
+```
+pip3 install playwright && python3 -m playwright install chromium
+python3 tests/crazygames_check.py
+```
+
+These checks use a stand-in SDK, so they check the game's side of every call but not CrazyGames' own pages. Test those on CrazyGames with their QA tool.
+
 ## Files
 
 - `index.html`: the menus, on-screen panels and styling
 - `game.js`: the game itself (graphics, physics, golfers, multiplayer, sound)
 - `server.py`: serves the game and runs the multiplayer rooms
 - `course-data.js`: the 18 hole layouts, in yards (the server reads the pars from here too)
+- `course-island.js`: the 9 Kai Lagoon holes, including the ocean and beaches (the server reads these pars too)
 - `clubs.js`: the cartoon club models
+- `platform.js`: the CrazyGames SDK layer (saves, rooms, invites, settings); does nothing outside CrazyGames
+- `config.js`: build settings (empty for the normal copy; the CrazyGames build writes its own)
+- `tools/build_crazygames.py`: makes the CrazyGames upload
+- `tests/`: automated CrazyGames checks and the stand-in SDK they use
 - `fonts/`: the handwriting and serif fonts for the yardage-book hole card (free, open-licence fonts, included so they work offline)
 
 The game loads Three.js from the internet, so the computer needs a connection when the page opens.

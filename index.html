@@ -9,6 +9,7 @@
   <!-- start every download at once instead of one after another -->
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
+  <link rel="preload" href="./platform.js" as="script">
   <link rel="preload" href="./clubs.js" as="script">
   <link rel="preload" href="./game.js" as="script">
   <link rel="preload" href="fonts/fraunces-latin-900-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -726,6 +727,33 @@
     @keyframes fNudgeIn { from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(.9); } to { opacity: 1; transform: translateX(-50%); } }
     @keyframes fNudgeBob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
     @media (prefers-reduced-motion: reduce) { #f-nudge { animation: none; } }
+    /* ---------- course picker (title screen, lobby, leaderboard) ---------- */
+    .ts-courses, .lobby-courses { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .ts-course, .lobby-courses button { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border: 2.5px solid #172238; border-radius: 10px; background: #fbf3dc; color: #172238; text-align: left; cursor: pointer; box-shadow: 0 4px 0 #172238; transition: transform .08s, box-shadow .08s, background .15s; -webkit-tap-highlight-color: transparent; }
+    .ts-course svg, .lobby-courses svg { flex: none; width: 36px; height: 36px; border-radius: 7px; background: #dff1fb; }
+    .ts-course span, .lobby-courses span { display: grid; min-width: 0; line-height: 1.1; }
+    .ts-course b, .lobby-courses b { font: 900 16px system-ui, -apple-system, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ts-course small, .lobby-courses small { font: 700 12px system-ui, sans-serif; color: #6b6450; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ts-course[aria-checked="true"], .lobby-courses button[aria-checked="true"] { background: #ffd23f; }
+    .ts-course[aria-checked="true"] small, .lobby-courses button[aria-checked="true"] small { color: #4a3f18; }
+    .ts-course:active { transform: translateY(3px); box-shadow: 0 1px 0 #172238; }
+    .lobby-courses button:disabled { cursor: default; box-shadow: 0 2px 0 #172238; }
+    .lobby-courses button:disabled:not([aria-checked="true"]) { opacity: .45; }
+    #lobby-course-note { font: 600 12px system-ui, sans-serif; color: #6b7280; margin-left: 6px; }
+    .board-courses { display: flex; gap: 8px; margin: 10px 0 2px; }
+    .board-courses[hidden] { display: none; }
+    .board-courses button { display: flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px; border: 2px solid #1f4d2e; border-radius: 999px; background: #fff; color: #1f4d2e; font: 800 13px system-ui, sans-serif; cursor: pointer; }
+    .board-courses button svg { width: 24px; height: 24px; border-radius: 50%; background: #dff1fb; }
+    .board-courses button.on { background: #1f4d2e; color: #fff; }
+    @media (max-width: 640px) {
+      .ts { grid-template-rows: auto auto auto auto 1fr auto auto auto; }
+      .ts-course { padding: 6px 8px; gap: 8px; } .ts-course svg { width: 30px; height: 30px; } .ts-course b { font-size: 15px; } .ts-course small { font-size: 11px; }
+      .lobby-courses { gap: 8px; } .lobby-courses button { padding: 6px 6px; gap: 6px; } .lobby-courses svg { width: 26px; height: 26px; border-radius: 6px; } .lobby-courses b { font-size: 15px; } .lobby-courses small { font-size: 11px; }
+    }
+    @media (max-height: 520px) and (orientation: landscape) {
+      .ts-course { padding: 4px 8px; box-shadow: 0 3px 0 #172238; } .ts-course svg { width: 26px; height: 26px; } .ts-course b { font-size: 14px; } .ts-course small { font-size: 11px; }
+      .ts .char-pick { grid-row: 1 / span 7; }
+    }
   </style>
 </head>
 <body class="loading">
@@ -867,6 +895,10 @@
         <button class="char-card" type="button" role="radio" data-character="boy" aria-label="Boy golfer"><canvas width="400" height="360"></canvas><b>Boy</b></button>
         <button class="char-card" type="button" role="radio" data-character="girl" aria-label="Girl golfer"><canvas width="400" height="360"></canvas><b>Girl</b></button>
       </div>
+      <div class="ts-courses" role="radiogroup" aria-label="Choose a course">
+        <button type="button" role="radio" class="ts-course" data-course-pick="classic"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M3 36 Q20 30 37 36 L37 40 L3 40 Z" fill="#7cc35a"/><rect x="18" y="20" width="4" height="15" rx="1.5" fill="#7a4f2c"/><circle cx="20" cy="15" r="10" fill="#3f9d49"/><circle cx="13" cy="19" r="6.5" fill="#4bae50"/><circle cx="27" cy="19" r="6.5" fill="#368d43"/><circle cx="20" cy="10" r="6" fill="#5cb957"/><path d="M29 36 L29 26" stroke="#172238" stroke-width="1.5"/><path d="M29 26 L35 28 L29 30 Z" fill="#e44b3a"/></svg><span><b data-course-title>18 holes</b><small data-course-sub>par 72</small></span></button>
+        <button type="button" role="radio" class="ts-course" data-course-pick="island"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="0" y="31" width="40" height="9" fill="#2bb3d6"/><path d="M0 33 Q5 31 10 33 T20 33 T30 33 T40 33" stroke="#e6fbff" stroke-width="1.6" fill="none"/><path d="M4 32 Q16 25 34 32 Z" fill="#f3dca3"/><path d="M19 30 Q17 21 22 11" stroke="#8a5a34" stroke-width="3.2" fill="none" stroke-linecap="round"/><g fill="#2f9e4a"><path d="M22 11 Q13 6 5 12 Q14 9 22 12Z"/><path d="M22 11 Q31 5 38 11 Q30 9 22 12Z"/><path d="M22 11 Q15 13 11 21 Q17 14 22 12Z"/><path d="M22 11 Q29 13 33 21 Q27 14 22 12Z"/><path d="M22 11 Q21 3 25 1 Q23 6 23 11Z"/></g><circle cx="21" cy="13" r="1.6" fill="#7a4f2c"/><circle cx="23.5" cy="13.3" r="1.6" fill="#7a4f2c"/></svg><span><b data-course-title>Kai Lagoon</b><small data-course-sub>9 holes · par 35</small></span></button>
+      </div>
       <div class="ts-go">
         <button id="play-game" class="ts-btn ts-primary" type="button">Tee off solo</button>
         <button id="open-friends" class="ts-btn" type="button">Play with friends</button>
@@ -891,6 +923,11 @@
         <div class="code-actions"><button id="lobby-share" class="menu-button primary" type="button">Share invite</button><button id="lobby-copy-code" class="menu-button" type="button">Copy code</button></div>
       </div>
       <details class="invite-link"><summary>Or send the invite link</summary><div class="share-row"><input id="lobby-link" class="text-input" readonly aria-label="Invite link"><button id="lobby-copy" class="menu-button" type="button">Copy link</button></div></details>
+      <div class="field">Course <small id="lobby-course-note"></small></div>
+      <div id="lobby-courses" class="lobby-courses" role="radiogroup" aria-label="Course for this room">
+        <button type="button" role="radio" data-lobby-course="classic"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M3 36 Q20 30 37 36 L37 40 L3 40 Z" fill="#7cc35a"/><rect x="18" y="20" width="4" height="15" rx="1.5" fill="#7a4f2c"/><circle cx="20" cy="15" r="10" fill="#3f9d49"/><circle cx="13" cy="19" r="6.5" fill="#4bae50"/><circle cx="27" cy="19" r="6.5" fill="#368d43"/><circle cx="20" cy="10" r="6" fill="#5cb957"/><path d="M29 36 L29 26" stroke="#172238" stroke-width="1.5"/><path d="M29 26 L35 28 L29 30 Z" fill="#e44b3a"/></svg><span><b data-course-title>18 holes</b><small data-course-sub>par 72</small></span></button>
+        <button type="button" role="radio" data-lobby-course="island"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="0" y="31" width="40" height="9" fill="#2bb3d6"/><path d="M0 33 Q5 31 10 33 T20 33 T30 33 T40 33" stroke="#e6fbff" stroke-width="1.6" fill="none"/><path d="M4 32 Q16 25 34 32 Z" fill="#f3dca3"/><path d="M19 30 Q17 21 22 11" stroke="#8a5a34" stroke-width="3.2" fill="none" stroke-linecap="round"/><g fill="#2f9e4a"><path d="M22 11 Q13 6 5 12 Q14 9 22 12Z"/><path d="M22 11 Q31 5 38 11 Q30 9 22 12Z"/><path d="M22 11 Q15 13 11 21 Q17 14 22 12Z"/><path d="M22 11 Q29 13 33 21 Q27 14 22 12Z"/><path d="M22 11 Q21 3 25 1 Q23 6 23 11Z"/></g><circle cx="21" cy="13" r="1.6" fill="#7a4f2c"/><circle cx="23.5" cy="13.3" r="1.6" fill="#7a4f2c"/></svg><span><b data-course-title>Kai Lagoon</b><small data-course-sub>9 holes · par 35</small></span></button>
+      </div>
       <div class="field">Players</div>
       <ul id="lobby-players" class="lobby-players"></ul>
       <button id="lobby-start" class="menu-button primary" type="button">Start round</button>
@@ -903,6 +940,7 @@
   <section id="board-menu" class="screen-overlay" hidden>
     <div class="menu-panel board-panel">
       <div class="board-head"><div><div class="eyebrow">Fairway Friends Golf Club</div><h2>Leaderboard</h2></div><button id="board-close" data-key="Esc" class="menu-button" type="button">Close</button></div>
+      <div id="board-courses" class="board-courses" role="tablist" aria-label="Course"><button type="button" data-board-course="classic" class="on"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M3 36 Q20 30 37 36 L37 40 L3 40 Z" fill="#7cc35a"/><rect x="18" y="20" width="4" height="15" rx="1.5" fill="#7a4f2c"/><circle cx="20" cy="15" r="10" fill="#3f9d49"/><circle cx="13" cy="19" r="6.5" fill="#4bae50"/><circle cx="27" cy="19" r="6.5" fill="#368d43"/><circle cx="20" cy="10" r="6" fill="#5cb957"/><path d="M29 36 L29 26" stroke="#172238" stroke-width="1.5"/><path d="M29 26 L35 28 L29 30 Z" fill="#e44b3a"/></svg><span data-course-title>18 holes</span></button><button type="button" data-board-course="island"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="0" y="31" width="40" height="9" fill="#2bb3d6"/><path d="M0 33 Q5 31 10 33 T20 33 T30 33 T40 33" stroke="#e6fbff" stroke-width="1.6" fill="none"/><path d="M4 32 Q16 25 34 32 Z" fill="#f3dca3"/><path d="M19 30 Q17 21 22 11" stroke="#8a5a34" stroke-width="3.2" fill="none" stroke-linecap="round"/><g fill="#2f9e4a"><path d="M22 11 Q13 6 5 12 Q14 9 22 12Z"/><path d="M22 11 Q31 5 38 11 Q30 9 22 12Z"/><path d="M22 11 Q15 13 11 21 Q17 14 22 12Z"/><path d="M22 11 Q29 13 33 21 Q27 14 22 12Z"/><path d="M22 11 Q21 3 25 1 Q23 6 23 11Z"/></g><circle cx="21" cy="13" r="1.6" fill="#7a4f2c"/><circle cx="23.5" cy="13.3" r="1.6" fill="#7a4f2c"/></svg><span data-course-title>Kai Lagoon</span></button></div>
       <div class="board-tabs" role="tablist">
         <button type="button" role="tab" data-period="all" class="on">All-time</button><button type="button" role="tab" data-period="week">This week</button><button type="button" role="tab" data-period="today">Today</button><button type="button" role="tab" data-period="mine">My rounds</button>
       </div>
@@ -980,14 +1018,18 @@
   <div id="flyover-skip" hidden>Press any key to skip flyover</div>
   <div id="tip-toast"><b>Quick tip</b><span id="tip-text"></span></div>
 
+  <script src="./config.js"></script>
+  <script src="./platform.js"></script>
   <script src="./course-data.js"></script>
+  <script src="./course-island.js"></script>
   <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
   <script type="module">
     // Three.js loads as a modern ES module; the game files then run with it available as THREE.
     import * as THREE from 'three';
     window.THREE = THREE;
     const load = src => new Promise((resolve, reject) => { const tag = document.createElement('script'); tag.src = src; tag.onload = resolve; tag.onerror = () => reject(new Error(src)); document.body.appendChild(tag); });
-    load('./clubs.js').then(() => load('./game.js')).catch(error => {
+    // the CrazyGames SDK (when this is the CrazyGames build) is initialised first: saves, settings and invites must be ready before the game reads them
+    window.FFPlatform.init().then(() => load('./clubs.js')).then(() => load('./game.js')).catch(error => {
       document.body.insertAdjacentHTML('beforeend', `<p style="position:fixed;inset:auto 0 40%;text-align:center;font:800 18px system-ui;color:#fff;z-index:99">Couldn’t load ${error.message}. Check that all the game files are in the same folder.</p>`);
     });
   </script>

@@ -35,20 +35,31 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 PORT = int(os.environ.get("PORT", "8010"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
-def read_pars():
-    """Pars come straight from course-data.js, so the server always matches the course."""
+def read_pars(filename="course-data.js", fallback=(4, 4, 3, 5, 4, 3, 4, 4, 5, 4, 5, 3, 4, 4, 3, 5, 4, 4)):
+    """Pars come straight from the course files, so the server always matches the courses."""
     try:
         import re
-        with open(os.path.join(ROOT, "course-data.js"), encoding="utf-8") as f:
+        with open(os.path.join(ROOT, filename), encoding="utf-8") as f:
             pars = [int(p) for p in re.findall(r"\bpar:\s*(\d+)", f.read())]
         if pars and all(3 <= p <= 6 for p in pars):
             return pars
     except OSError:
         pass
-    return [4, 4, 3, 5, 4, 3, 4, 4, 5, 4, 5, 3, 4, 4, 3, 5, 4, 4]
+    return list(fallback)
 
 
-PARS = read_pars()
+# every course the game offers: id -> pars (the original 18 holes are "classic")
+COURSE_PARS = {"classic": read_pars("course-data.js"), "island": read_pars("course-island.js", (4, 4, 3, 5, 4, 3, 4, 4, 4))}
+PARS = COURSE_PARS["classic"]
+
+
+def clean_course(value):
+    return value if value in COURSE_PARS else "classic"
+
+
+def round_course(row):
+    """Rounds saved before there were two courses have no course id: they are classic rounds."""
+    return row.get("course") or "classic"
 MAX_SCORE_MULTIPLIER = 2
 MAX_PLAYERS = 4
 MAX_WIND_MPH = 11
@@ -76,8 +87,8 @@ def clean_character(value):
     return "girl" if value == "girl" else "boy"
 
 
-def make_winds():
-    return [{"mph": round(random.uniform(0, MAX_WIND_MPH), 1), "angle": random.uniform(0, 6.283)} for _ in PARS]
+def make_winds(pars=None):
+    return [{"mph": round(random.uniform(0, MAX_WIND_MPH), 1), "angle": random.uniform(0, 6.283)} for _ in (pars or PARS)]
 
 
 # ---------- saved scores & leaderboard ----------
@@ -171,15 +182,17 @@ def flush_scores():
             print("Leaderboard: could not save scores:", error)
 
 
-def record_round(name, holes, character, device, mode, round_id):
+def record_round(name, holes, character, device, mode, round_id, course="classic"):
     """Validate and save one finished round (every hole of the course). Returns the saved entry, or None."""
-    if not isinstance(holes, list) or len(holes) != len(PARS):
+    course = clean_course(course)
+    pars = COURSE_PARS[course]
+    if not isinstance(holes, list) or len(holes) != len(pars):
         return None
     try:
         holes = [int(h) for h in holes]
     except (TypeError, ValueError):
         return None
-    if any(h < 1 or h > par * MAX_SCORE_MULTIPLIER for h, par in zip(holes, PARS)):
+    if any(h < 1 or h > par * MAX_SCORE_MULTIPLIER for h, par in zip(holes, pars)):
         return None
     round_id = str(round_id or secrets.token_hex(8))[:40]
     with score_lock:
@@ -187,7 +200,7 @@ def record_round(name, holes, character, device, mode, round_id):
             return next((r for r in saved_rounds if r["id"] == round_id), None)
         total = sum(holes)
         entry = {"id": round_id, "name": clean_name(name), "device": clean_device(device), "character": clean_character(character),
-                 "holes": holes, "total": total, "toPar": total - sum(PARS), "mode": mode, "when": int(time.time())}
+                 "holes": holes, "total": total, "toPar": total - sum(pars), "mode": mode, "course": course, "when": int(time.time())}
         saved_rounds.append(entry)
         seen_round_ids.add(round_id)
         if len(saved_rounds) > MAX_SAVED_ROUNDS:
@@ -196,12 +209,14 @@ def record_round(name, holes, character, device, mode, round_id):
     return entry
 
 
-def leaderboard(period="all", limit=50, device=""):
+def leaderboard(period="all", limit=50, device="", course="classic"):
     now = time.time()
     since = {"today": now - 86400, "week": now - 7 * 86400}.get(period, 0)
     with score_lock:
         # only full rounds of today's course compete (older nine-hole rounds stay saved but don't mix into an 18-hole board)
-        rows = [r for r in saved_rounds if r["when"] >= since and len(r.get("holes", ())) == len(PARS)]
+        course = clean_course(course)
+        pars = COURSE_PARS[course]
+        rows = [r for r in saved_rounds if r["when"] >= since and round_course(r) == course and len(r.get("holes", ())) == len(pars)]
     best = {}                                        # each golfer's best round (by device, else by name)
     for r in rows:
         key = r.get("device") or ("name:" + r["name"].lower())
@@ -216,18 +231,20 @@ def leaderboard(period="all", limit=50, device=""):
                         "mode": r["mode"], "character": r["character"], "me": bool(device) and r.get("device") == device})
     mine = next((e for e in entries if e["me"]), None)
     return {"period": period, "players": len(entries), "rounds": len(rows), "entries": entries[:limit],
-            "me": mine, "holes": len(PARS), "par": sum(PARS), "storage": "upstash" if UPSTASH_URL and UPSTASH_TOKEN else "file"}
+            "me": mine, "course": course, "holes": len(pars), "par": sum(pars), "storage": "upstash" if UPSTASH_URL and UPSTASH_TOKEN else "file"}
 
 
 class Room:
-    def __init__(self):
+    def __init__(self, course="classic"):
         self.code = new_code()
+        self.course = clean_course(course)
+        self.pars = COURSE_PARS[self.course]
         self.players = []
         self.host_id = None
         self.phase = "lobby"          # lobby, playing, holeover, finished
         self.hole = 0
         self.turn_id = None
-        self.winds = make_winds()
+        self.winds = make_winds(self.pars)
         self.clients = []             # list of (player_id, queue)
         self.recorded = False
         self.round_no = 0
@@ -247,7 +264,8 @@ class Room:
             "hole": self.hole,
             "turnId": self.turn_id,
             "wind": self.winds[self.hole],
-            "pars": PARS,
+            "pars": self.pars,
+            "course": self.course,
             "round": self.round_no,
             "players": [{
                 "id": p["id"], "name": p["name"], "character": p["character"], "color": p["color"],
@@ -277,7 +295,7 @@ class Room:
             p["holed"] = False
             p["done"] = p["left"]
             if p["left"]:
-                p["scores"][index] = PARS[index] * MAX_SCORE_MULTIPLIER
+                p["scores"][index] = self.pars[index] * MAX_SCORE_MULTIPLIER
         first = next((p for p in self.players if not p["done"]), None)
         self.turn_id = first["id"] if first else None
         if not first:
@@ -288,7 +306,7 @@ class Room:
         order = self.players
         if not any(not p["done"] for p in order):
             self.turn_id = None
-            self.phase = "finished" if self.hole >= len(PARS) - 1 else "holeover"
+            self.phase = "finished" if self.hole >= len(self.pars) - 1 else "holeover"
             if self.phase == "finished":
                 self.record_scores()
             return
@@ -307,7 +325,7 @@ class Room:
         self.recorded = True
         for p in self.players:
             if not p["left"] and all(sc is not None for sc in p["scores"]):
-                entry = record_round(p["name"], p["scores"], p["character"], p.get("device"), "room", f"{self.code}-{self.round_no}-{p['id']}")
+                entry = record_round(p["name"], p["scores"], p["character"], p.get("device"), "room", f"{self.code}-{self.round_no}-{p['id']}", self.course)
                 if entry:
                     p["posted"] = True
 
@@ -320,7 +338,7 @@ class Room:
             return
         if not player["done"]:
             player["done"] = True
-            player["scores"][self.hole] = PARS[self.hole] * MAX_SCORE_MULTIPLIER
+            player["scores"][self.hole] = self.pars[self.hole] * MAX_SCORE_MULTIPLIER
             if self.turn_id == player["id"]:
                 self.advance_turn()
             elif not any(not p["done"] for p in self.players):
@@ -331,10 +349,10 @@ class Room:
                 self.host_id = others[0]["id"]
 
 
-def new_player(name, character, color):
+def new_player(name, character, color, holes=None):
     return {
         "id": secrets.token_hex(4), "token": secrets.token_hex(16), "name": clean_name(name),
-        "character": clean_character(character), "color": color, "scores": [None] * len(PARS), "device": "",
+        "character": clean_character(character), "color": color, "scores": [None] * (holes or len(PARS)), "device": "",
         "ball": None, "strokes": 0, "done": False, "holed": False, "connections": 0,
         "left": False, "last_seen": time.time(),
     }
@@ -395,7 +413,20 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-cache")
+        # The CrazyGames build is served from CrazyGames' own domain and calls this server from there, so every
+        # response (JSON, live updates, files) allows cross-origin use. No cookies are involved: a room token
+        # travels in the request itself, so "*" is safe here.
+        self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
+
+    def do_OPTIONS(self):
+        # CORS preflight: browsers ask before a cross-origin POST with a JSON body
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "86400")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def json_reply(self, status, obj):
         body = json.dumps(obj).encode()
@@ -425,7 +456,8 @@ class Handler(SimpleHTTPRequestHandler):
                 limit = max(1, min(100, int((qs.get("limit") or ["50"])[0])))
             except ValueError:
                 limit = 50
-            return self.json_reply(200, leaderboard(period if period in ("all", "week", "today") else "all", limit, device))
+            course = clean_course((qs.get("course") or ["classic"])[0])
+            return self.json_reply(200, leaderboard(period if period in ("all", "week", "today") else "all", limit, device, course))
         if url.path != "/events":
             if os.path.basename(url.path).startswith("scores.json"):
                 self.send_response(404)
@@ -486,16 +518,16 @@ class Handler(SimpleHTTPRequestHandler):
                 now = time.time()
                 if now - last_submit.get(who, 0) < SUBMIT_GAP_SECONDS:
                     return self.json_reply(429, {"error": "Slow down: one round at a time."})
-                entry = record_round(body.get("name"), body.get("holes"), body.get("character"), device, "solo", body.get("roundId"))
+                entry = record_round(body.get("name"), body.get("holes"), body.get("character"), device, "solo", body.get("roundId"), body.get("course"))
                 if not entry:
                     return self.json_reply(400, {"error": "That round could not be saved."})
                 last_submit[who] = now
-                board = leaderboard("all", 0, device)
+                board = leaderboard("all", 0, device, entry["course"])
                 return self.json_reply(200, {"ok": True, "entry": {k: entry[k] for k in ("total", "toPar")}, "rank": board["me"]["rank"] if board["me"] else None, "players": board["players"]})
 
             if path == "/api/create":
-                room = Room()
-                player = new_player(body.get("name"), body.get("character"), COLORS[0])
+                room = Room(body.get("course"))
+                player = new_player(body.get("name"), body.get("character"), COLORS[0], len(room.pars))
                 player["device"] = clean_device(body.get("device"))
                 room.players.append(player)
                 room.host_id = player["id"]
@@ -504,16 +536,16 @@ class Handler(SimpleHTTPRequestHandler):
 
             room = rooms.get(str(body.get("code", "")).upper())
             if not room:
-                return self.json_reply(404, {"error": "That room code was not found. Check the 4 letters and try again."})
+                return self.json_reply(404, {"code": "not_found", "error": "That room code was not found. Check the 4 letters and try again."})
             room.touched = time.time()
 
             if path == "/api/join":
                 if room.phase != "lobby":
-                    return self.json_reply(409, {"error": "That round has already started. Ask your friends to make a new room."})
+                    return self.json_reply(409, {"code": "started", "error": "That round has already started. Ask your friends to make a new room."})
                 if len(room.players) >= MAX_PLAYERS:
-                    return self.json_reply(409, {"error": "That room is full (4 players max)."})
+                    return self.json_reply(409, {"code": "full", "error": "That room is full (4 players max)."})
                 used = {p["color"] for p in room.players}
-                player = new_player(body.get("name"), body.get("character"), next(c for c in COLORS if c not in used))
+                player = new_player(body.get("name"), body.get("character"), next(c for c in COLORS if c not in used), len(room.pars))
                 player["device"] = clean_device(body.get("device"))
                 room.players.append(player)
                 room.broadcast()
@@ -527,6 +559,19 @@ class Handler(SimpleHTTPRequestHandler):
                 me["character"] = clean_character(body.get("character"))
                 room.broadcast()
                 return self.json_reply(200, {"ok": True})
+
+            if path == "/api/course":
+                if me["id"] != room.host_id:
+                    return self.json_reply(403, {"error": "Only the host can pick the course."})
+                if room.phase != "lobby":
+                    return self.json_reply(409, {"code": "started", "error": "The round already started."})
+                room.course = clean_course(body.get("course"))
+                room.pars = COURSE_PARS[room.course]
+                room.winds = make_winds(room.pars)
+                for p in room.players:
+                    p["scores"] = [None] * len(room.pars)
+                room.broadcast()
+                return self.json_reply(200, {"ok": True, "course": room.course})
 
             if path == "/api/start":
                 if me["id"] != room.host_id:
@@ -546,7 +591,7 @@ class Handler(SimpleHTTPRequestHandler):
                 except (KeyError, TypeError, ValueError):
                     return self.json_reply(400, {"error": "Bad shot data."})
                 ball["surface"] = str(result.get("surface", ""))[:16]
-                max_score = PARS[room.hole] * MAX_SCORE_MULTIPLIER
+                max_score = room.pars[room.hole] * MAX_SCORE_MULTIPLIER
                 me["ball"] = ball
                 me["strokes"] = max(0, min(int(result.get("strokes", 0)), max_score))
                 me["holed"] = bool(result.get("holed"))
@@ -571,10 +616,10 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.json_reply(409, {"error": "The round is not over yet."})
                 room.players = [p for p in room.players if not p["left"]]
                 for p in room.players:
-                    p["scores"] = [None] * len(PARS)
+                    p["scores"] = [None] * len(room.pars)
                 room.recorded = False
                 room.round_no += 1
-                room.winds = make_winds()
+                room.winds = make_winds(room.pars)
                 room.start_hole(0)
                 room.broadcast()
                 return self.json_reply(200, {"ok": True})
